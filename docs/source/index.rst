@@ -1,5 +1,11 @@
-Welcome to aiospotify's documentation!
-======================================
+AIOSpotify
+==========
+
+An asynchronous Spotify Web API wrapper.
+
+.. warning::
+   
+   Still under construction
 
 .. toctree::
    :maxdepth: 2
