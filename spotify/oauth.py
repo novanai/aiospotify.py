@@ -30,36 +30,20 @@ def build_auth_token(client_id: str, client_secret: str) -> str:
     return token
 
 
-class AuthorizationCodeFlow:
+class AuthorizationCodeFlow(rest.REST):
     """Implementation to help with the Authorization Code Flow.
 
     Spotify Reference: https://developer.spotify.com/documentation/general/guides/authorization/code-flow/
-
-    Parameters
-    ----------
-    client_id : str
-        The client's ID.
-    client_secret : str
-        The client's secret.
     """
 
-    def __init__(self, client_id: str, client_secret: str) -> None:
-        self.client_id = client_id
-        self.client_secret = client_secret
-
-        self.auth_token = build_auth_token(client_id, client_secret)
-        self.access: AuthorizationCodeFlowAccessManager | None = None
-        self._rest: rest.REST | None = None
-
-    @property
-    def rest(self) -> rest.REST:
-        if not self._rest:
-            raise RuntimeError("Didn't authorize your access token, did you? Idot.")
-        return self._rest
+    def __init__(self) -> None:
+        pass
 
     def build_url(
         self,
+        client_id: str,
         redirect_uri: str,
+        code_challenge: str | None = None,
         *,
         state: str | None = None,
         scopes: list[str] | None = None,
@@ -69,8 +53,12 @@ class AuthorizationCodeFlow:
 
         Parameters
         ----------
+        client_id : str
+            The Client ID of your application.
         redirect_uri : str
             The URI to redirect to after the user grants or denies permission.
+        code_challenge : str, optional
+            Code challenge. **Only required for PKCE.**
         state : str, optional
             This provides protection against attacks such as cross-site request forgery.
         scopes : list[str], optional
@@ -83,24 +71,32 @@ class AuthorizationCodeFlow:
         str
             The authorization code flow url.
         """
-        query = parse.urlencode(
-            utils.dict_work(
-                {
-                    "client_id": self.client_id,
-                    "response_type": "code",
-                    "redirect_uri": redirect_uri,
-                    "state": state,
-                    "scope": " ".join(scopes) if scopes else None,
-                    "show_dialog": show_dialog,
-                }
-            )
-        )
+        query = {
+            "client_id": client_id,
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "scope": " ".join(scopes) if scopes else None,
+            "show_dialog": show_dialog,
+        }
+        if code_challenge:
+            query["code_challenge_method"] = "S256"
+            query["code_challenge"] = code_challenge
+
+        query = parse.urlencode(utils.dict_work(query))
+
         return f"https://accounts.spotify.com/authorize?{query}"
 
     async def request_access_token(
-        self, code: str, redirect_uri: str
-    ) -> AuthorizationCodeFlowAccessManager:
-        """Request an access token using the code returned by Spotify.
+        self,
+        code: str,
+        redirect_uri: str,
+        client_id: str,
+        *,
+        client_secret: str | None = None,
+        code_verifier: str | None = None,
+    ) -> None:
+        """Request an access token from Spotify.
 
         Parameters
         ----------
@@ -108,37 +104,52 @@ class AuthorizationCodeFlow:
             The authorization code returned by Spotify after the user granted permission to access their account.
         redirect_uri : str
             The URI Spotify redirected to in the previous request.
-
-        Returns
-        -------
-        AccessManager
-            The access token and relevant information.
+        client_id : str
+            The client's ID.
+        client_secret : str, optional
+            The client's secret. **Only required for *NON*-PKCE.**
+        code_verifier : str, optional
+            Must match the code_challenge passed to oauth.AuthorizationCodeFlow.build_url. **Only required for PKCE.**
         """
+        if client_secret and code_verifier:
+            raise ValueError(
+                "Only one of client_secret and code_verifier is required, depending on "
+                "whether or not you are implementing PKCE."
+            )
+
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        if client_secret:
+            headers[
+                "Authorization"
+            ] = f"Basic {build_auth_token(client_id, client_secret)}"
+
+        data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        if code_verifier:
+            data["client_id"] = client_id
+            data["code_verifier"] = code_verifier
+
         async with aiohttp.request(
             "POST",
             "https://accounts.spotify.com/api/token",
-            headers={
-                "Authorization": f"Basic {self.auth_token}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
+            headers=headers,
+            data=data,
         ) as r:
             r.raise_for_status()
             data = await r.json()
-            self.access = AuthorizationCodeFlowAccessManager(
-                self.auth_token,
+            access = AuthorizationCodeFlowAccessManager(
                 data["access_token"],
                 data["token_type"],
                 datetime.timedelta(seconds=data["expires_in"]),
                 data["scope"].split(" "),
                 data["refresh_token"],
+                client_id=client_id,
+                client_secret=client_secret,
             )
-            self._rest = rest.REST(self.access)
-            return self.access
+            super().__init__(access)
 
 
 class AuthorizationCodeFlowAccessManager:
@@ -146,288 +157,106 @@ class AuthorizationCodeFlowAccessManager:
 
     Parameters
     ----------
-    auth_token : str
-        Base64 encoded `client_id:client_secret`.
     access_token : str
         An access token that can be used in API calls.
     token_type : str
         How the access token may be used.
-    expires_in : datetime.datetime
+    expires_in : datetime.timedelta
         The time period for which the access token is valid.
     scopes : list[str]
         A list of scopes which have been granted for the access token.
     refresh_token : str
         Used to refresh the access token once it has expired.
+    client_id : str
+        The client's ID.
+    client_secret : str, optional
+        The client's secret. **Only required for *NON*-PKCE.**
     """
 
     def __init__(
         self,
-        auth_token: str,
         access_token: str,
         token_type: str,
         expires_in: datetime.timedelta,
         scopes: list[str],  # TODO: Update with Scope enum
         refresh_token: str,
-    ) -> None:
-        self.auth_token = auth_token
-        self.access_token = access_token
-        self.token_type = token_type
-        self.scopes = scopes
-        self.expires_in = expires_in
-        self.refresh_token = refresh_token
-
-        self.expires_at = datetime.datetime.now(datetime.timezone.utc) + expires_in
-
-    async def validate_token(self) -> None:
-        if datetime.datetime.now(datetime.timezone.utc) > self.expires_at:
-            await self.refresh_access_token()
-
-    async def refresh_access_token(self):
-        async with aiohttp.request(
-            "POST",
-            "https://accounts.spotify.com/api/token",
-            headers={
-                "Authorization": f"Basic {self.auth_token}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": self.refresh_token,
-            },
-        ) as r:
-            r.raise_for_status()
-            data = await r.json()
-            self.access_token = data["access_token"]
-            self.token_type = data["token_type"]
-            self.scopes = data["scope"].split(" ")
-            self.expires_in = datetime.timedelta(seconds=data["expires_in"])
-            self.expires_at = (
-                datetime.datetime.now(datetime.timezone.utc) + self.expires_in
-            )
-            self.refresh_token = data.get("refresh_token") or self.refresh_token
-
-
-class AuthorizationCodeFlowWithPKCE:
-    """Implementation to help with the Authorization Code Flow with the PKCE extension.
-
-    Spotify Reference: https://developer.spotify.com/documentation/general/guides/authorization/code-flow/
-
-    Parameters
-    ----------
-    client_id : str
-        The client's ID.
-    """
-
-    def __init__(self, client_id: str) -> None:
-        self.client_id = client_id
-
-        self.access: AuthorizationCodeFlowWithPKCEAccessManager | None = None
-        self._rest: rest.REST | None = None
-
-    @property
-    def rest(self) -> rest.REST:
-        if not self._rest:
-            raise RuntimeError("Didn't authorize your access token, did you? Idot.")
-        return self._rest
-
-    def build_url(
-        self,
-        redirect_uri: str,
-        code_challenge: str,
         *,
-        state: str | None = None,
-        scopes: list[str] | None = None,
-        show_dialog: bool | None = None,
-    ) -> str:
-        """Build an authorization code flow url from the given parameters.
-
-        Parameters
-        ----------
-        redirect_uri : str
-            The URI to redirect to after the user grants or denies permission.
-        code_challenge : str
-            Code challenge.
-        state : str, optional
-            This provides protection against attacks such as cross-site request forgery.
-        scopes : list[str], optional
-            A list of scopes. TODO: Change once I introduce enums
-        show_dialog : bool, optional
-            Whether or not to force the user to approve the app again if they've already done so.
-
-        Returns
-        -------
-        str
-            The authorization code flow url.
-        """
-        query = parse.urlencode(
-            utils.dict_work(
-                {
-                    "client_id": self.client_id,
-                    "response_type": "code",
-                    "redirect_uri": redirect_uri,
-                    "state": state,
-                    "scope": " ".join(scopes) if scopes else None,
-                    "show_dialog": show_dialog,
-                    "code_challenge_method": "S256",
-                    "code_challenge": code_challenge,
-                }
-            )
-        )
-        return f"https://accounts.spotify.com/authorize?{query}"
-
-    async def request_access_token(
-        self, code: str, redirect_uri: str, code_verifier: str
-    ) -> AuthorizationCodeFlowWithPKCEAccessManager:
-        """Request an access token using the code returned by Spotify.
-
-        Parameters
-        ----------
-        code : str
-            The authorization code returned by Spotify after the user granted permission to access their account.
-        redirect_uri : str
-            The URI Spotify redirected to in the previous request.
-        code_verifier : str
-            Must match the code_challenge passed to AuthorizationCodeFlowWithPKCE.build_url
-
-        Returns
-        -------
-        AccessManager
-            The access token and relevant information.
-        """
-        async with aiohttp.request(
-            "POST",
-            "https://accounts.spotify.com/api/token",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-                "client_id": self.client_id,
-                "code_verifier": code_verifier,
-            },
-        ) as r:
-            r.raise_for_status()
-            data = await r.json()
-            self.access = AuthorizationCodeFlowWithPKCEAccessManager(
-                self.client_id,
-                data["access_token"],
-                data["token_type"],
-                datetime.timedelta(seconds=data["expires_in"]),
-                data["scope"].split(" "),
-                data["refresh_token"],
-            )
-            self._rest = rest.REST(self.access)
-            return self.access
-
-
-class AuthorizationCodeFlowWithPKCEAccessManager:
-    """An implementation to manage API access by storing and refreshing access tokens (if necessary).
-
-    Parameters
-    ----------
-    client_id : str
-        The client's ID.
-    access_token : str
-        An access token that can be used in API calls.
-    token_type : str
-        How the access token may be used.
-    expires_in : datetime.datetime
-        The time period for which the access token is valid.
-    scopes : list[str]
-        A list of scopes which have been granted for the access token.
-    refresh_token : str
-        Used to refresh the access token once it has expired.
-    """
-
-    def __init__(
-        self,
         client_id: str,
-        access_token: str,
-        token_type: str,
-        expires_in: datetime.timedelta,
-        scopes: list[str],  # TODO: Update with Scope enum
-        refresh_token: str,
+        client_secret: str | None = None,
     ) -> None:
-        self.client_id = client_id
         self.access_token = access_token
         self.token_type = token_type
         self.scopes = scopes
         self.expires_in = expires_in
         self.refresh_token = refresh_token
 
-        self.expires_at = datetime.datetime.now(datetime.timezone.utc) + expires_in
-
-    async def validate_token(self) -> None:
-        if datetime.datetime.now(datetime.timezone.utc) > self.expires_at:
-            await self.refresh_access_token()
-
-    async def refresh_access_token(self):
-        async with aiohttp.request(
-            "POST",
-            "https://accounts.spotify.com/api/token",
-            headers={
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": self.refresh_token,
-                "client_id": self.client_id,
-            },
-        ) as r:
-            r.raise_for_status()
-            data = await r.json()
-            self.access_token = data["access_token"]
-            self.token_type = data["token_type"]
-            self.scopes = data["scope"].split(" ")
-            self.expires_in = datetime.timedelta(seconds=data["expires_in"])
-            self.expires_at = (
-                datetime.datetime.now(datetime.timezone.utc) + self.expires_in
-            )
-            self.refresh_token = data.get("refresh_token") or self.refresh_token
-
-
-class ClientCredentialsFlow:
-    """Implementation to help with the Client Credentials Flow.
-
-    Spotify Reference: https://developer.spotify.com/documentation/general/guides/authorization/client-credentials/
-
-    Parameters
-    ----------
-    client_id : str
-        The client's ID.
-    client_secret : str
-        The client's secret.
-    """
-
-    def __init__(self, client_id: str, client_secret: str) -> None:
         self.client_id = client_id
         self.client_secret = client_secret
 
-        self.auth_token = build_auth_token(client_id, client_secret)
-        self.access: ClientCredentialsFlowAccessManager | None = None
-        self._rest: rest.REST | None = None
+        self.expires_at = datetime.datetime.now(datetime.timezone.utc) + expires_in
 
-    @property
-    def rest(self) -> rest.REST:
-        if not self._rest:
-            raise RuntimeError("Didn't authorize your access token, did you? Idot.")
-        return self._rest
+    async def validate_token(self) -> None:
+        if datetime.datetime.now(datetime.timezone.utc) > self.expires_at:
+            await self.refresh_access_token()
 
-    async def request_access_token(self) -> ClientCredentialsFlowAccessManager:
+    async def refresh_access_token(self):
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        if self.client_secret:
+            headers[
+                "Authorization"
+            ] = f"Basic {build_auth_token(self.client_id, self.client_secret)}"
+
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": self.refresh_token,
+        }
+        if not self.client_secret:
+            data["client_id"] = self.client_id
+
+        async with aiohttp.request(
+            "POST",
+            "https://accounts.spotify.com/api/token",
+            headers=headers,
+            data=data,
+        ) as r:
+            r.raise_for_status()
+            data = await r.json()
+            self.access_token = data["access_token"]
+            self.token_type = data["token_type"]
+            self.scopes = data["scope"].split(" ")
+            self.expires_in = datetime.timedelta(seconds=data["expires_in"])
+            self.expires_at = (
+                datetime.datetime.now(datetime.timezone.utc) + self.expires_in
+            )
+            self.refresh_token = data.get("refresh_token") or self.refresh_token
+
+
+class ClientCredentialsFlow(rest.REST):
+    """Implementation to help with the Client Credentials Flow.
+
+    Spotify Reference: https://developer.spotify.com/documentation/general/guides/authorization/client-credentials/
+    """
+
+    def __init__(self) -> None:
+        pass
+
+    async def request_access_token(
+        self, client_id: str, client_secret: str
+    ) -> None:
         """Request an access token using the code returned by Spotify
 
-        Returns
-        -------
-        AccessManager
-            The access token and relevant information.
+        Parameters
+        ----------
+        client_id : str
+            The client's ID.
+        client_secret : str
+            The client's secret.
         """
         async with aiohttp.request(
             "POST",
             "https://accounts.spotify.com/api/token",
             headers={
-                "Authorization": f"Basic {self.auth_token}",
+                "Authorization": f"Basic {build_auth_token(client_id, client_secret)}",
                 "Content-Type": "application/x-www-form-urlencoded",
             },
             data={
@@ -436,14 +265,14 @@ class ClientCredentialsFlow:
         ) as r:
             r.raise_for_status()
             data = await r.json()
-            self.access = ClientCredentialsFlowAccessManager(
-                self.auth_token,
+            access = ClientCredentialsFlowAccessManager(
                 data["access_token"],
                 data["token_type"],
                 datetime.timedelta(seconds=data["expires_in"]),
+                client_id=client_id,
+                client_secret=client_secret,
             )
-            self._rest = rest.REST(self.access)
-            return self.access
+            super().__init__(access)
 
 
 class ClientCredentialsFlowAccessManager:
@@ -451,27 +280,29 @@ class ClientCredentialsFlowAccessManager:
 
     Parameters
     ----------
-    auth_token : str
-        Base64 encoded `client_id:client_secret`.
     access_token : str
         An access token that can be used in API calls.
     token_type : str
         How the access token may be used.
-    expires_in : datetime.datetime
+    expires_in : datetime.timedelta
         The time period for which the access token is valid.
     """
 
     def __init__(
         self,
-        auth_token: str,
         access_token: str,
         token_type: str,
         expires_in: datetime.timedelta,
+        *,
+        client_id: str,
+        client_secret: str,
     ) -> None:
-        self.auth_token = auth_token
         self.access_token = access_token
         self.token_type = token_type
         self.expires_in = expires_in
+
+        self.client_id = client_id
+        self.client_secret = client_secret
 
         self.expires_at = datetime.datetime.now(datetime.timezone.utc) + expires_in
 
@@ -484,7 +315,7 @@ class ClientCredentialsFlowAccessManager:
             "POST",
             "https://accounts.spotify.com/api/token",
             headers={
-                "Authorization": f"Basic {self.auth_token}",
+                "Authorization": f"Basic {build_auth_token(self.client_id, self.client_secret)}",
                 "Content-Type": "application/x-www-form-urlencoded",
             },
             data={

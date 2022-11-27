@@ -18,19 +18,20 @@ class REST:
 
     Parameters
     ----------
-    access_manager : oauth.AuthorizationCodeFlowAccessManager | oauth.AuthorizationCodeFlowWithPKCEAccessManager | oauth.ClientCredentialsFlowAccessManager
+    access_manager : oauth.AuthorizationCodeFlowAccessManager | oauth.ClientCredentialsFlowAccessManager
         Access manager to use for requests.
     """
 
     def __init__(
         self,
         access_manager: oauth.AuthorizationCodeFlowAccessManager
-        | oauth.AuthorizationCodeFlowWithPKCEAccessManager
         | oauth.ClientCredentialsFlowAccessManager,
     ) -> None:
         self.access = access_manager
 
     async def get(self, url: str, query: dict[str, t.Any]) -> dict[str, t.Any]:
+        if not hasattr(self, "access"):
+            raise RuntimeError("Didn't request an access token, did you? Idot.")
         async with aiohttp.request(
             "GET",
             f"{spotify.BASE_URL}/{url}",
@@ -44,9 +45,11 @@ class REST:
             json.dump(await r.json(), open("./samples/sample.json", "w"), indent=4)
             return await r.json()
 
-    async def get_album(self, album_id: str, *, market: str | None = None) -> models.Album:
+    async def get_album(
+        self, album_id: str, *, market: str | None = None
+    ) -> models.Album:
         """Get Spotify catalog information for a single album.
-        
+
         Parameters
         ----------
         album_id : str
@@ -54,7 +57,7 @@ class REST:
         market : str | None
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        
+
         Returns
         -------
         models.Album
@@ -68,7 +71,7 @@ class REST:
         self, album_ids: list[str], *, market: str | None = None
     ) -> list[models.Album]:
         """Get Spotify catalog information for multiple albums.
-        
+
         Parameters
         ----------
         album_ids : list[str]
@@ -76,7 +79,7 @@ class REST:
         market : str | None
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        
+
         Returns
         -------
         list[models.Album]
@@ -98,7 +101,7 @@ class REST:
         market: str | None = None,
     ) -> models.Paginator[models.Track]:
         """Get Spotify catalog information about an album's tracks.
-        
+
         Parameters
         ----------
         album_id : str
@@ -110,7 +113,7 @@ class REST:
         market : int | None
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        
+
         Returns
         -------
         models.Paginator[models.Track]
@@ -132,7 +135,7 @@ class REST:
         market: str | None = None,
     ) -> models.Paginator[models.Album]:
         """Get a list of the albums saved in the current Spotify user's 'Your Music' library.
-        
+
         Parameters
         ----------
         limit : int | None
@@ -142,7 +145,7 @@ class REST:
         market : int | None
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        
+
         Returns
         -------
         models.Paginator[models.Album]
