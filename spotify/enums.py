@@ -4,6 +4,7 @@ import enum
 @enum.unique
 class AlbumGroup(enum.Enum):
     """The relationship between the artist and album."""
+
     ALBUM = "album"
     SINGLE = "single"
     COMPILATION = "compilation"
@@ -13,6 +14,7 @@ class AlbumGroup(enum.Enum):
 @enum.unique
 class AlbumType(enum.Enum):
     """The type of album."""
+
     ALBUM = "album"
     """An album."""
     SINGLE = "single"
@@ -24,6 +26,7 @@ class AlbumType(enum.Enum):
 @enum.unique
 class ReleaseDatePrecision(enum.Enum):
     """Precision of a release date."""
+
     YEAR = "year"
     """Precise to the release year."""
     MONTH = "month"
@@ -35,6 +38,7 @@ class ReleaseDatePrecision(enum.Enum):
 @enum.unique
 class Reason(enum.Enum):
     """Restriction reason."""
+
     MARKET = "market"
     """Content not available in given market."""
     PRODUCT = "product"

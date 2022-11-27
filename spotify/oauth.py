@@ -240,9 +240,7 @@ class ClientCredentialsFlow(rest.REST):
     def __init__(self) -> None:
         pass
 
-    async def request_access_token(
-        self, client_id: str, client_secret: str
-    ) -> None:
+    async def request_access_token(self, client_id: str, client_secret: str) -> None:
         """Request an access token using the code returned by Spotify
 
         Parameters

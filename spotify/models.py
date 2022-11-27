@@ -22,6 +22,7 @@ ModelT = typing.TypeVar("ModelT", bound=ModelBase)
 @attrs.frozen
 class Album(ModelBase):
     """An album."""
+
     album_type: enums.AlbumType
     """The type of the album."""
     total_tracks: int
@@ -55,7 +56,7 @@ class Album(ModelBase):
     album_group: enums.AlbumGroup | None
     """Represents the relationship between the artist and the album. 
     Present when getting an artist's albums."""
-    tracks: Paginator[Track]
+    tracks: Paginator[Track] | None
     """The tracks of the album."""
 
     @classmethod
@@ -77,13 +78,16 @@ class Album(ModelBase):
             payload["uri"],
             [Artist.from_payload(ar) for ar in payload["artists"]],
             payload.get("album_group"),
-            Paginator.from_payload(payload["tracks"], Track),
+            Paginator.from_payload(tra, Track)
+            if (tra := payload.get("tracks"))
+            else None,
         )
 
 
 @attrs.frozen
 class Artist(ModelBase):
     """An artist."""
+
     external_urls: ExternalURLs
     """Known external URLs for this artist."""
     followers: Followers | None
@@ -122,6 +126,7 @@ class Artist(ModelBase):
 @attrs.frozen
 class ExternalIDs(ModelBase):
     """External IDs."""
+
     isrc: str
     """`International Standard Recording Code <http://en.wikipedia.org/wiki/International_Standard_Recording_Code/>`_"""
     ean: str
@@ -141,6 +146,7 @@ class ExternalIDs(ModelBase):
 @attrs.frozen
 class ExternalURLs(ModelBase):
     """External URLs"""
+
     spotify: str
     """The Spotify URL for the object."""
 
@@ -152,6 +158,7 @@ class ExternalURLs(ModelBase):
 @attrs.frozen
 class Followers(ModelBase):
     """Information about followers."""
+
     href: str
     """This will always be set to `None`, as the Web API does not support it at the moment."""
     total: int
@@ -168,6 +175,7 @@ class Followers(ModelBase):
 @attrs.frozen
 class Image(ModelBase):
     """An image."""
+
     url: str
     """The source URL of the image."""
     height: int
@@ -187,6 +195,7 @@ class Image(ModelBase):
 @attrs.frozen
 class Restrictions(ModelBase):
     """Content restrictions."""
+
     reason: enums.Reason
     """The reason for the restriction."""
 
@@ -204,6 +213,7 @@ class Paginator(
 ):
     """A paginator with helpful methods (to be made) to paginate
     through large amounts of content."""
+
     href: str
     """A link to the Web API endpoint returning the full result of the request."""
     items: list[ModelT]
