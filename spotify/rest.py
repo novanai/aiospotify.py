@@ -5,7 +5,7 @@ import typing as t
 import aiohttp
 
 import spotify
-from spotify import models, utils
+from spotify import errors, models, utils
 
 if t.TYPE_CHECKING:
     from spotify import enums, oauth
@@ -35,7 +35,6 @@ class REST:
 
     async def request(self, method: str, url: str, query: dict[str, t.Any]) -> t.Any:
         self.check_access()
-        print(utils.dict_work(query))
 
         async with aiohttp.request(
             method,
@@ -46,9 +45,12 @@ class REST:
                 "Content-Type": "application/json",
             },
         ) as r:
-            r.raise_for_status()
-            # json.dump(await r.json(), open("./samples/sample.json", "w"), indent=4)
-            return await r.json()
+            data = await r.json()
+            json.dump(await r.json(), open("./samples/sample.json", "w"), indent=4)
+
+            if not r.ok:
+                raise errors.APIError.from_payload(data["error"])
+            return data
 
     async def get(self, url: str, query: dict[str, t.Any]) -> t.Any:
         return await self.request("GET", url, query)
@@ -68,7 +70,7 @@ class REST:
         ----------
         album_id : str
             The ID of the album.
-        market : str | None
+        market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
 
@@ -84,13 +86,13 @@ class REST:
     async def get_several_albums(
         self, album_ids: list[str], *, market: str | None = None
     ) -> list[models.Album]:
-        """Get Spotify catalog information for multiple albums.
+        """Get Spotify catalog information for several albums.
 
         Parameters
         ----------
         album_ids : list[str]
-            A list of albums IDs.
-        market : str | None
+            A list of album IDs.
+        market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
 
@@ -120,11 +122,11 @@ class REST:
         ----------
         album_id : str
             The ID of the album.
-        limit : int | None
+        limit : int, optional
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int | None
+        offset : int, optional
             The index of the first item to return. Default: 0 (the first item).
-        market : int | None
+        market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
 
@@ -152,11 +154,11 @@ class REST:
 
         Parameters
         ----------
-        limit : int | None
+        limit : int, optional
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int | None
+        offset : int, optional
             The index of the first item to return. Default: 0 (the first item).
-        market : int | None
+        market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
 
@@ -221,12 +223,12 @@ class REST:
 
         Parameters
         ----------
-        country : str | None
+        country : str, optional
             Only get content relevant to this country.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        limit : int | None
+        limit : int, optional
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int | None
+        offset : int, optional
             The index of the first item to return. Default: 0 (the first item).
 
         Returns
@@ -243,3 +245,129 @@ class REST:
             )["albums"],
             models.Album,
         )
+
+    async def get_artist(self, artist_id: str) -> models.Artist:
+        """Get Spotify catalog information for a single artist.
+
+        Parameters
+        ----------
+        artist_id : str
+            The ID of the artist.
+
+        Returns
+        -------
+        models.Artist
+            The requested artist.
+        """
+        return models.Artist.from_payload(await self.get(f"artists/{artist_id}", {}))
+
+    async def get_several_artists(self, artist_ids: list[str]) -> list[models.Artist]:
+        """Get Spotify catalog information for several artists.
+
+        Parameters
+        ----------
+        artist_ids : list[str]
+            A list of artist IDs.
+
+        Returns
+        -------
+        list[models.Artist]
+            The requested artists.
+        """
+        return [
+            models.Artist.from_payload(art)
+            for art in (await self.get("artists", {"ids": ",".join(artist_ids)}))[
+                "artists"
+            ]
+        ]
+
+    async def get_artists_albums(
+        self,
+        artist_id: str,
+        *,
+        include_groups: list[enums.AlbumGroup] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        market: str | None = None,
+    ) -> models.Paginator[models.Album]:
+        """Get Spotify catalog information about an artist's albums.
+
+        Parameters
+        ----------
+        artist_id : str
+            The ID of the artist.
+        include_groups : list[enums.AlbumGroup], optional
+            Used to filter the type of items returned. If not specified, all album types will be returned.
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.Album]
+            A paginator who's items are a list of albums.
+        """
+        return models.Paginator.from_payload(
+            await self.get(
+                f"artists/{artist_id}/albums",
+                {
+                    "include_groups": ",".join(g.value for g in include_groups)
+                    if include_groups
+                    else None,
+                    "limit": limit,
+                    "offset": offset,
+                    "market": market,
+                },
+            ),
+            models.Album,
+        )
+
+    async def get_artists_top_tracks(
+        self, artist_id: str, *, market: str
+    ) -> list[models.Track]:
+        """Get Spotify catalog information about an artist's top tracks.
+
+        Parameters
+        ----------
+        artist_id : str
+            The ID of the artist.
+        market : str
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.Track]
+            A list of tracks.
+        """
+        return [
+            models.Track.from_payload(tra)
+            for tra in (
+                await self.get(f"artists/{artist_id}/top-tracks", {"market": market})
+            )["tracks"]
+        ]
+
+    async def get_artists_related_artists(self, artist_id: str) -> list[models.Artist]:
+        """Get Spotify catalog information about artists similar to a given artist.
+        Similarity is based on analysis of the Spotify community's listening history.
+
+        Parameters
+        ----------
+        artist_id : str
+            The ID of the artist.
+
+        Returns
+        -------
+        list[models.Artist]
+            A list of artists.
+        """
+        return [
+            models.Artist.from_payload(art)
+            for art in (await self.get(f"artists/{artist_id}/related-artists", {}))[
+                "artists"
+            ]
+        ]

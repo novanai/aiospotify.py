@@ -27,9 +27,9 @@ class Album(ModelBase):
     """The type of the album."""
     total_tracks: int
     """The number of tracks in the album."""
-    available_markets: list[str]
+    available_markets: list[str] | None
     """The markets in which the album is available (`ISO 3166-1 alpha-2 country codes <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_).
-    Returns an empty list if a market was specified in the request.
+    Returns ``None`` if a market was specified in the request.
     
     .. note::
         An album is considered available in a market when at least 1 of its tracks is available in that market."""
@@ -64,7 +64,7 @@ class Album(ModelBase):
         return cls(
             enums.AlbumType(payload["album_type"]),
             payload["total_tracks"],
-            payload.get("available_markets", []),
+            payload.get("available_markets"),
             ExternalURLs.from_payload(payload["external_urls"]),
             payload["href"],
             payload["id"],
@@ -129,17 +129,17 @@ class ExternalIDs(ModelBase):
 
     isrc: str
     """`International Standard Recording Code <http://en.wikipedia.org/wiki/International_Standard_Recording_Code/>`_"""
-    ean: str
+    ean: str | None
     """`International Article Number <https://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29>`_"""
-    upc: str
+    upc: str | None
     """`Universal Product Code <http://en.wikipedia.org/wiki/Universal_Product_Code>`_"""
 
     @classmethod
     def from_payload(cls, payload: dict[str, typing.Any]) -> ExternalIDs:
         return cls(
             payload["isrc"],
-            payload["ean"],
-            payload["upc"],
+            payload.get("ean"),
+            payload.get("upc"),
         )
 
 
@@ -160,7 +160,7 @@ class Followers(ModelBase):
     """Information about followers."""
 
     href: str
-    """This will always be set to `None`, as the Web API does not support it at the moment."""
+    """This will always be set to ``None``, as the Web API does not support it at the moment."""
     total: int
     """The total number of followers."""
 
@@ -211,8 +211,10 @@ class Paginator(
     ModelBase,
     typing.Generic[ModelT],
 ):
-    """A paginator with helpful methods (to be made) to paginate
-    through large amounts of content."""
+    """A paginator with helpful methods to paginate
+    through large amounts of content.
+
+    TODO: make those 'helpful methods'"""
 
     href: str
     """A link to the Web API endpoint returning the full result of the request."""
@@ -246,14 +248,17 @@ class Paginator(
 
 @attrs.frozen
 class Track(ModelBase):
+    """A track."""
+
     album: Album | None
-    """The album on which the track appears. Will be `None` when fetching an album's tracks."""
+    """The album on which the track appears. Will be ``None`` when fetching an album's tracks."""
     artists: list[Artist]
     """The artists who performed the track."""
-    available_markets: list[str]
-    """A list of the countries in which the track can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    available_markets: list[str] | None
+    """A list of the countries in which the track can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+    Returns ``None`` if a market was specified in the request."""
     disc_number: int
-    """The disc number (usually `1` unless the album consists of more than one disc)."""
+    """The disc number (usually ``1`` unless the album consists of more than one disc)."""
     duration: datetime.timedelta
     """The track length."""
     explicit: bool
@@ -279,7 +284,7 @@ class Track(ModelBase):
     popularity: int | None
     """The popularity of the track. The value will be between 0 and 100, with 100 being the most popular."""
     preview_url: str | None
-    """A link to a 30 second preview (MP3 format) of the track. Can be `None`"""
+    """A link to a 30 second preview (MP3 format) of the track. Can be ``None``"""
     track_number: int
     """The number of the track. If an album has several discs, the track number is the number on the specified disc."""
     uri: str
@@ -292,7 +297,7 @@ class Track(ModelBase):
         return cls(
             Album.from_payload(alb) if (alb := payload.get("album")) else None,
             [Artist.from_payload(art) for art in payload["artists"]],
-            payload["available_markets"],
+            payload.get("available_markets"),
             payload["disc_number"],
             datetime.timedelta(milliseconds=payload["duration_ms"]),
             payload["explicit"],
