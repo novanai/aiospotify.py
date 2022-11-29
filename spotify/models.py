@@ -124,6 +124,95 @@ class Artist(ModelBase):
 
 
 @attrs.frozen
+class Copyright(ModelBase):
+    """Copyright statements."""
+
+    text: str
+    """The copyright text for this content."""
+    type: str  # TODO: Use enum
+    """The type of copyright: C = the copyright, P = the sound recording (performance) copyright."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Copyright:
+        return cls(
+            payload["text"],
+            payload["type"],
+        )
+
+
+@attrs.frozen
+class Episode(ModelBase):
+    """An episode."""
+
+    audio_preview_url: str | None
+    """A URL to a 30 second preview (MP3 format) of the episode. ``None`` if not available."""
+    description: str
+    """A description of the episode. HTML tags are stripped away from this field, use the ``html_description`` field in case HTML tags are needed."""
+    html_description: str
+    """A description of the episode. This field may contain HTML tags."""
+    duration: datetime.timedelta
+    """The episode length."""
+    explicit: bool
+    """Whether or not the episode has explicit content."""
+    external_urls: ExternalURLs
+    """External URLs for this episode."""
+    href: str
+    """A link to the Web API endpoint providing full details of the episode."""
+    id: str
+    """The Spotify ID for the episode."""
+    images: list[Image]
+    """The cover art for the episode in various sizes, widest first."""
+    is_externally_hosted: bool
+    """True if the episode is hosted outside of Spotify's CDN."""
+    is_playable: bool
+    """True if the episode is playable in the given market. Otherwise false."""
+    languages: list[str]
+    """A list of the languages used in the episode, identified by their `ISO 639-1 code <https://en.wikipedia.org/wiki/ISO_639>`_."""
+    name: str
+    """The name of the episode."""
+    release_date: datetime.datetime
+    """The date the episode was first released."""
+    release_date_precision: enums.ReleaseDatePrecision
+    """The precision with which ``release_date`` value is known."""
+    resume_point: ResumePoint | None
+    """The user's most recent position in the episode. Set if the supplied access token is a user token and has the scope 'user-read-playback-position'."""
+    uri: str
+    """The Spotify URI for the episode."""
+    restrictions: Restrictions | None
+    """Present when a content restriction is applied."""
+    show: Show | None
+    """The show on which this episode appears. Not present when fetching a show."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Episode:
+        return cls(
+            payload["audio_preview_url"],
+            payload["description"],
+            payload["html_description"],
+            datetime.timedelta(milliseconds=payload["duration_ms"]),
+            payload["explicit"],
+            ExternalURLs.from_payload(payload["external_urls"]),
+            payload["href"],
+            payload["id"],
+            [Image.from_payload(im) for im in payload["images"]],
+            payload["is_externally_hosted"],
+            payload["is_playable"],
+            payload["languages"],
+            payload["name"],
+            utils.datetime_from_timestamp(payload["release_date"]),
+            enums.ReleaseDatePrecision(payload["release_date_precision"]),
+            ResumePoint.from_payload(res)
+            if (res := payload.get("resume_point"))
+            else None,
+            payload["uri"],
+            Restrictions.from_payload(res)
+            if (res := payload.get("restrictions"))
+            else None,
+            Show.from_payload(sho) if (sho := payload.get("show")) else None,
+        )
+
+
+@attrs.frozen
 class ExternalIDs(ModelBase):
     """External IDs."""
 
@@ -207,6 +296,23 @@ class Restrictions(ModelBase):
 
 
 @attrs.frozen
+class ResumePoint(ModelBase):
+    """Resume point information."""
+
+    fully_played: bool
+    """Whether or not the episode has been fully played by the user."""
+    resume_position: datetime.timedelta
+    """The user's most recent position in the episode."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> ResumePoint:
+        return cls(
+            payload["fully_played"],
+            datetime.timedelta(milliseconds=payload["resume_position_ms"]),
+        )
+
+
+@attrs.frozen
 class Paginator(
     ModelBase,
     typing.Generic[ModelT],
@@ -243,6 +349,67 @@ class Paginator(
             payload["offset"],
             payload["previous"],
             payload["total"],
+        )
+
+
+@attrs.frozen
+class Show(ModelBase):
+    """A show."""
+
+    available_markets: list[str]
+    """A list of the countries in which the show can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    copyrights: list[Copyright]
+    """The copyright statements of the show."""
+    description: str
+    """A description of the show. HTML tags are stripped away from this field, use the ``models.Show.html_description`` field in case HTML tags are needed."""
+    html_description: str
+    """A description of the show. This field may contain HTML tags."""
+    explicit: bool
+    """Whether or not the show has explicit content."""
+    external_urls: ExternalURLs
+    """External URLs for this show."""
+    href: str
+    """A link to the Web API endpoint providing full details of the show."""
+    id: str
+    """The Spotify ID for the show."""
+    images: list[Image]
+    """The cover art for the show in various sizes, widest first."""
+    is_externally_hosted: bool | None
+    """True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be ``None`` in some cases."""
+    languages: list[str]
+    """A list of the languages used in the show, identified by their `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
+    media_type: str
+    """The media type of the show."""
+    name: str
+    """The name of the episode."""
+    publisher: str
+    """The publisher of the show."""
+    uri: str
+    """The Spotify URI for the show."""
+    episodes: Paginator[Episode] | None
+    """The episodes of the show. Not available when fetching several shows."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Show:
+        return cls(
+            payload["available_markets"],
+            [Copyright.from_payload(cop) for cop in payload["copyrights"]],
+            payload["description"],
+            payload["html_description"],
+            payload["explicit"],
+            ExternalURLs.from_payload(payload["external_urls"]),
+            payload["href"],
+            payload["id"],
+            [Image.from_payload(im) for im in payload["images"]],
+            payload["is_externally_hosted"],
+            payload["languages"],
+            payload["media_type"],
+            payload["name"],
+            payload["publisher"],
+            payload["uri"],
+            Paginator.from_payload(eps, Episode)
+            if (eps := payload.get("episodes"))
+            else None,
         )
 
 

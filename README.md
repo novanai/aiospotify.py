@@ -10,7 +10,7 @@ The endpoints which have yet to be covered
 
 [x] Albums
 [x] Artists
-[ ] Shows
+[x] Shows
 [ ] Episodes
 [ ] Audiobooks
 [ ] Chapters

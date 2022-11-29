@@ -45,8 +45,14 @@ class REST:
                 "Content-Type": "application/json",
             },
         ) as r:
-            data = await r.json()
-            json.dump(await r.json(), open("./samples/sample.json", "w"), indent=4)
+            # No data to load, but status 200 OK
+            # TODO: make a custom error for this
+            try:
+                data = await r.json()
+            except aiohttp.ContentTypeError:
+                return
+
+            # json.dump(data, open("./samples/sample.json", "w"), indent=4)
 
             if not r.ok:
                 raise errors.APIError.from_payload(data["error"])
@@ -183,7 +189,7 @@ class REST:
         Parameters
         ----------
         album_ids : list[str]
-            A list of albums IDs. Maximum: 50.
+            A list of album IDs. Maximum: 50.
         """
         await self.put("me/albums", {"ids": album_ids})
 
@@ -371,3 +377,157 @@ class REST:
                 "artists"
             ]
         ]
+
+    async def get_show(self, show_id: str, *, market: str | None = None) -> models.Show:
+        """Get Spotify catalog information for a single show.
+
+        Parameters
+        ----------
+        show_id : str
+            The ID of the show.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Show
+            The requested show.
+        """
+        return models.Show.from_payload(
+            await self.get(f"shows/{show_id}", {"market": market})
+        )
+
+    async def get_several_shows(
+        self, show_ids: list[str], *, market: str | None = None
+    ) -> list[models.Show]:
+        """Get Spotify catalog information for several shows.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            A list of show IDs.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.Show]
+            The requested shows.
+        """
+        return [
+            models.Show.from_payload(sho)
+            for sho in (
+                await self.get("shows", {"ids": ",".join(show_ids), "market": market})
+            )["shows"]
+        ]
+
+    async def get_show_episodes(
+        self,
+        show_id: str,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        market: str | None = None,
+    ) -> models.Paginator[models.Episode]:
+        """Get Spotify catalog information about an shows's episodes.
+
+        Parameters
+        ----------
+        show_id : str
+            The ID of the show.
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.Track]
+            A paginator who's items are a list of tracks.
+        """
+        return models.Paginator.from_payload(
+            await self.get(
+                f"shows/{show_id}/episodes",
+                {"limit": limit, "offset": offset, "market": market},
+            ),
+            models.Episode,
+        )
+
+    async def get_users_saved_shows(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        market: str | None = None,
+    ) -> models.Paginator[models.Show]:
+        """Get a list of the shows saved in the current user's library.
+
+        Parameters
+        ----------
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.Show]
+            A paginator who's items are a list of shows.
+        """
+        return models.Paginator.from_payload(
+            await self.get(
+                "me/shows", {"limit": limit, "offset": offset, "market": market}
+            ),
+            models.Show,
+        )
+
+    async def save_shows_for_user(
+        self,
+        show_ids: list[str],
+    ) -> None:
+        """Save one or more shows to the current user's library.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            A list of show IDs. Maximum: 50.
+        """
+        await self.put("me/shows", {"ids": ",".join(show_ids)})
+
+    async def remove_users_saved_shows(
+        self, show_ids: list[str], *, market: str | None = None
+    ) -> None:
+        """Remove one or more shows from the current user's library.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            A list of shows IDs. Maximum: 50.
+        market : str, optional
+            Only modify content that is available in that market (I think, I'm honestly not sure why this field is included here).
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+        """
+        await self.delete("me/shows", {"ids": ",".join(show_ids), "market": market})
+
+    async def check_users_saved_shows(self, show_ids: list[str]) -> list[bool]:
+        """Check if one or more shows is already saved in the current user's library.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            A list of shows IDs. Maximum: 20.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans.
+        """
+        return await self.get("me/shows/contains", {"ids": ",".join(show_ids)})
