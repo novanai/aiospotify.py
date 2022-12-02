@@ -287,6 +287,7 @@ class Restrictions(ModelBase):
 
     reason: enums.Reason
     """The reason for the restriction."""
+    # TODO: Safely handle unknown values
 
     @classmethod
     def from_payload(cls, payload: dict[str, typing.Any]) -> Restrictions:
@@ -387,7 +388,7 @@ class Show(ModelBase):
     uri: str
     """The Spotify URI for the show."""
     episodes: Paginator[Episode] | None
-    """The episodes of the show. Not available when fetching several shows."""
+    """The episodes of the show. Not available when fetching several shows or fetching a specific episode."""
 
     @classmethod
     def from_payload(cls, payload: dict[str, typing.Any]) -> Show:

@@ -52,7 +52,7 @@ class REST:
             except aiohttp.ContentTypeError:
                 return
 
-            # json.dump(data, open("./samples/sample.json", "w"), indent=4)
+            json.dump(data, open("./samples/sample.json", "w"), indent=4)
 
             if not r.ok:
                 raise errors.APIError.from_payload(data["error"])
@@ -531,3 +531,139 @@ class REST:
             A list of booleans.
         """
         return await self.get("me/shows/contains", {"ids": ",".join(show_ids)})
+
+    async def get_episode(self, episode_id: str, *, market: str | None = None) -> models.Episode:
+        """Get Spotify catalog information for a single episode.
+
+        Parameters
+        ----------
+        episode_id : str
+            The ID of the episode.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Episode
+            The requested episode.
+        """
+        return models.Episode.from_payload(
+            await self.get(f"episodes/{episode_id}", {"market": market})
+        )
+
+    async def get_several_episodes(
+        self, episode_ids: list[str], *, market: str | None = None
+    ) -> list[models.Episode]:
+        """Get Spotify catalog information for several episodes.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            A list of episode IDs. Maximum: 50.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.Episode]
+            The requested episodes.
+        """
+        return [
+            models.Episode.from_payload(epi)
+            for epi in (
+                await self.get("episodes", {"ids": ",".join(episode_ids), "market": market})
+            )["episodes"]
+        ]
+
+    async def get_users_saved_episodes(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        market: str | None = None,
+    ) -> models.Paginator[models.Episode]:
+        """Get a list of the episodes saved in the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+            I cannot guarantee that this method will always work.
+
+        Parameters
+        ----------
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.Episode]
+            A paginator who's items are a list of episodes.
+        """
+        return models.Paginator.from_payload(
+            await self.get(
+                "me/episodes", {"limit": limit, "offset": offset, "market": market}
+            ),
+            models.Episode,
+        )
+
+    async def save_episodes_for_user(
+        self,
+        episode_ids: list[str],
+    ) -> None:
+        """Save one or more episodes to the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+            I cannot guarantee that this method will always work.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            A list of episode IDs. Maximum: 50.
+        """
+        await self.put("me/episodes", {"ids": ",".join(episode_ids)})
+
+    async def remove_users_saved_episodes(
+        self, episode_ids: list[str]
+    ) -> None:
+        """Remove one or more episodes from the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+            I cannot guarantee that this method will always work.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            A list of episodes IDs. Maximum: 50.
+        """
+        await self.delete("me/episodes", {"ids": ",".join(episode_ids)})
+
+    async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
+        """Check if one or more episodes is already saved in the current user's library.
+.       
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+            I cannot guarantee that this method will always work.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            A list of episodes IDs. Maximum: 50.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans.
+        """
+        return await self.get("me/episodes/contains", {"ids": ",".join(episode_ids)})
