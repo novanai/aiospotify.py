@@ -11,9 +11,9 @@ The endpoints which have yet to be covered
 * [x] Albums
 * [x] Artists
 * [x] Shows
-* [ ] Episodes
-* [ ] Audiobooks
-* [ ] Chapters
+* [x] Episodes
+* [x] Audiobooks
+* [x] Chapters
 * [ ] Tracks
 * [ ] Search
 * [ ] Users

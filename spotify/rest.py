@@ -836,3 +836,60 @@ class REST:
         return await self.get(
             "me/audiobooks/contains", {"ids": ",".join(audiobook_ids)}
         )
+
+    async def get_chapter(
+        self, chapter_id: str, *, market: str | None = None
+    ) -> models.Chapter:
+        """Get Spotify catalog information for a single chapter.
+
+        .. note ::
+
+            Chapters are only available for the US, UK, Ireland, New Zealand and Australia markets.
+
+        Parameters
+        ----------
+        chapter_id : str
+            The ID of the chapter.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Chapter
+            The requested chapter.
+        """
+        return models.Chapter.from_payload(
+            await self.get(f"chapters/{chapter_id}", {"market": market})
+        )
+
+    async def get_several_chapters(
+        self, chapter_ids: list[str], *, market: str | None = None
+    ) -> list[models.Chapter]:
+        """Get Spotify catalog information for several chapters.
+
+        .. note ::
+
+            Chapters are only available for the US, UK, Ireland, New Zealand and Australia markets.
+
+        Parameters
+        ----------
+        chapter_ids : list[str]
+            A list of chapter IDs. Maximum: 50.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.Chapter]
+            The requested chapters.
+        """
+        return [
+            models.Chapter.from_payload(cha)
+            for cha in (
+                await self.get(
+                    "chapters", {"ids": ",".join(chapter_ids), "market": market}
+                )
+            )["chapters"]
+        ]
