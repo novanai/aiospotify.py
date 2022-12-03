@@ -14,7 +14,7 @@ The endpoints which have yet to be covered
 * [x] Episodes
 * [x] Audiobooks
 * [x] Chapters
-* [ ] Tracks
+* [x] Tracks
 * [ ] Search
 * [ ] Users
 * [ ] Playlists
