@@ -29,12 +29,13 @@ class REST:
     ) -> None:
         self.access = access_manager
 
-    def check_access(self) -> None:
+    async def check_access(self) -> None:
         if not hasattr(self, "access"):
             raise RuntimeError("Didn't request an access token, did you? Idot.")
+        await self.access.validate_token()
 
     async def request(self, method: str, url: str, query: dict[str, t.Any]) -> t.Any:
-        self.check_access()
+        await self.check_access()
 
         async with aiohttp.request(
             method,
@@ -52,7 +53,7 @@ class REST:
             except aiohttp.ContentTypeError:
                 return
 
-            json.dump(data, open("./samples/sample.json", "w"), indent=4)
+            # json.dump(data, open("./samples/sample.json", "w"), indent=4)
 
             if not r.ok:
                 raise errors.APIError.from_payload(data["error"])
@@ -532,7 +533,9 @@ class REST:
         """
         return await self.get("me/shows/contains", {"ids": ",".join(show_ids)})
 
-    async def get_episode(self, episode_id: str, *, market: str | None = None) -> models.Episode:
+    async def get_episode(
+        self, episode_id: str, *, market: str | None = None
+    ) -> models.Episode:
         """Get Spotify catalog information for a single episode.
 
         Parameters
@@ -573,7 +576,9 @@ class REST:
         return [
             models.Episode.from_payload(epi)
             for epi in (
-                await self.get("episodes", {"ids": ",".join(episode_ids), "market": market})
+                await self.get(
+                    "episodes", {"ids": ",".join(episode_ids), "market": market}
+                )
             )["episodes"]
         ]
 
@@ -631,9 +636,7 @@ class REST:
         """
         await self.put("me/episodes", {"ids": ",".join(episode_ids)})
 
-    async def remove_users_saved_episodes(
-        self, episode_ids: list[str]
-    ) -> None:
+    async def remove_users_saved_episodes(self, episode_ids: list[str]) -> None:
         """Remove one or more episodes from the current user's library.
 
         .. warning::
@@ -650,7 +653,7 @@ class REST:
 
     async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
         """Check if one or more episodes is already saved in the current user's library.
-.       
+
         .. warning::
 
             This API endpoint is in **beta** and could change without warning.
@@ -667,3 +670,169 @@ class REST:
             A list of booleans.
         """
         return await self.get("me/episodes/contains", {"ids": ",".join(episode_ids)})
+
+    async def get_audiobook(
+        self, audiobook_id: str, *, market: str | None = None
+    ) -> models.Audiobook:
+        """Get Spotify catalog information for a single audiobook.
+
+        .. note ::
+
+            Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
+
+        Parameters
+        ----------
+        audiobook_id : str
+            The ID of the audiobook.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Audiobook
+            The requested audiobook.
+        """
+        return models.Audiobook.from_payload(
+            await self.get(f"audiobooks/{audiobook_id}", {"market": market})
+        )
+
+    async def get_several_audiobooks(
+        self, audiobook_ids: list[str], *, market: str | None = None
+    ) -> list[models.Audiobook]:
+        """Get Spotify catalog information for several audiobooks.
+
+        .. note ::
+
+            Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
+
+        Parameters
+        ----------
+        audiobook_ids : list[str]
+            A list of audiobook IDs. Maximum: 50.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.Audiobook]
+            The requested audiobooks.
+        """
+        return [
+            models.Audiobook.from_payload(aud)
+            for aud in (
+                await self.get(
+                    "audiobooks", {"ids": ",".join(audiobook_ids), "market": market}
+                )
+            )["audiobooks"]
+        ]
+
+    async def get_audiobook_chapters(
+        self,
+        audiobook_id: str,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        market: str | None = None,
+    ) -> models.Paginator[models.Chapter]:
+        """Get Spotify catalog information about an audiobooks's chapters.
+
+        .. note ::
+
+            Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
+
+        Parameters
+        ----------
+        audiobook_id : str
+            The ID of the audiobook.
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.Chapter]
+            A paginator who's items are a list of chapters.
+        """
+        return models.Paginator.from_payload(
+            await self.get(
+                f"audiobooks/{audiobook_id}/chapters",
+                {"limit": limit, "offset": offset, "market": market},
+            ),
+            models.Chapter,
+        )
+
+    async def get_users_saved_audiobooks(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> models.Paginator[models.Audiobook]:
+        """Get a list of the audiobooks saved in the current user's library.
+
+        Parameters
+        ----------
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+
+        Returns
+        -------
+        models.Paginator[models.Audiobook]
+            A paginator who's items are a list of audiobooks.
+        """
+        return models.Paginator.from_payload(
+            await self.get("me/audiobooks", {"limit": limit, "offset": offset}),
+            models.Audiobook,
+        )
+
+    async def save_audiobooks_for_user(
+        self,
+        audiobook_ids: list[str],
+    ) -> None:
+        """Save one or more audiobooks to the current user's library.
+
+        Parameters
+        ----------
+        audiobook_ids : list[str]
+            A list of audiobook IDs. Maximum: 50.
+        """
+        await self.put("me/audiobooks", {"ids": ",".join(audiobook_ids)})
+
+    async def remove_users_saved_audiobooks(
+        self,
+        audiobook_ids: list[str],
+    ) -> None:
+        """Remove one or more audiobooks from the current user's library.
+
+        Parameters
+        ----------
+        audiobook_ids : list[str]
+            A list of audiobooks IDs. Maximum: 50.
+        """
+        await self.delete("me/audiobooks", {"ids": ",".join(audiobook_ids)})
+
+    async def check_users_saved_audiobooks(
+        self, audiobook_ids: list[str]
+    ) -> list[bool]:
+        """Check if one or more audiobooks is already saved in the current user's library.
+
+        Parameters
+        ----------
+        audiobook_ids : list[str]
+            A list of audiobooks IDs. Maximum: 50.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans.
+        """
+        return await self.get(
+            "me/audiobooks/contains", {"ids": ",".join(audiobook_ids)}
+        )

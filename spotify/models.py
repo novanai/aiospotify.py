@@ -124,6 +124,159 @@ class Artist(ModelBase):
 
 
 @attrs.frozen
+class Audiobook(ModelBase):
+    """An audiobook."""
+
+    authors: list[Author]
+    """The author(s) for the audiobook."""
+    available_markets: list[str]
+    """A list of the countries in which the audiobook can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    copyrights: list[Copyright]
+    """The copyright statements of the audiobook."""
+    description: str
+    """A description of the audiobook. HTML tags are stripped away from this field, use the ``models.Audiobook.html_description`` field in case HTML tags are needed."""
+    html_description: str
+    """A description of the audiobook. This field may contain HTML tags."""
+    explicit: bool
+    """Whether or not the audiobook has explicit content."""
+    external_urls: ExternalURLs
+    """External URLs for this audiobook."""
+    href: str
+    """A link to the Web API endpoint providing full details of the audiobook."""
+    id: str
+    """The Spotify ID for the audiobook."""
+    images: list[Image]
+    """The cover art for the audiobook in various sizes, widest first."""
+    languages: list[str]
+    """A list of the languages used in the audiobook, identified by their `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
+    media_type: str
+    """The media type of the audiobook."""
+    name: str
+    """The name of the audiobook."""
+    narrators: list[Narrator]
+    """The narrator(s) of the audiobook."""
+    publisher: str
+    """The publisher of the audiobook."""
+    uri: str
+    """The Spotify URI for the audiobook."""
+    total_chapters: int
+    """The number of chapters in this audiobook."""
+    chapters: Paginator[Chapter] | None
+    """The chapters of the audiobook. Not available when fetching several audiobooks or fetching a specific chapter."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Audiobook:
+        return cls(
+            [Author.from_payload(aut) for aut in payload["authors"]],
+            payload["available_markets"],
+            [Copyright.from_payload(cop) for cop in payload["copyrights"]],
+            payload["description"],
+            payload["html_description"],
+            payload["explicit"],
+            ExternalURLs.from_payload(payload["external_urls"]),
+            payload["href"],
+            payload["id"],
+            [Image.from_payload(im) for im in payload["images"]],
+            payload["languages"],
+            payload["media_type"],
+            payload["name"],
+            [Narrator.from_payload(nar) for nar in payload["narrators"]],
+            payload["publisher"],
+            payload["uri"],
+            payload["total_chapters"],
+            Paginator.from_payload(cha, Chapter)
+            if (cha := payload.get("chapters"))
+            else None,
+        )
+
+
+@attrs.frozen
+class Author(ModelBase):
+    """Author information."""
+
+    name: str
+    """The name of the author."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Author:
+        return cls(
+            payload["name"],
+        )
+
+
+@attrs.frozen
+class Chapter(ModelBase):
+    """A chapter."""
+
+    audio_preview_url: str | None
+    """A URL to a 30 second preview (MP3 format) of the chapter. ``None`` if not available."""
+    chapter_number: int
+    """The number of the chapter."""
+    description: str
+    """A description of the chapter. HTML tags are stripped away from this field, use the ``html_description`` field in case HTML tags are needed."""
+    html_description: str
+    """A description of the chapter. This field may contain HTML tags."""
+    duration: datetime.timedelta
+    """The chapter length."""
+    explicit: bool
+    """Whether or not the chapter has explicit content."""
+    external_urls: ExternalURLs
+    """External URLs for this chapter."""
+    href: str
+    """A link to the Web API endpoint providing full details of the chapter."""
+    id: str
+    """The Spotify ID for the chapter."""
+    images: list[Image]
+    """The cover art for the chapter in various sizes, widest first."""
+    is_playable: bool
+    """True if the chapter is playable in the given market. Otherwise false."""
+    languages: list[str]
+    """A list of the languages used in the chapter, identified by their `ISO 639-1 code <https://en.wikipedia.org/wiki/ISO_639>`_."""
+    name: str
+    """The name of the chapter."""
+    release_date: datetime.datetime
+    """The date the chapter was first released."""
+    release_date_precision: enums.ReleaseDatePrecision
+    """The precision with which ``release_date`` value is known."""
+    resume_point: ResumePoint | None
+    """The user's most recent position in the chapter. Set if the supplied access token is a user token and has the scope 'user-read-playback-position'."""
+    uri: str
+    """The Spotify URI for the chapter."""
+    restrictions: Restrictions | None
+    """Present when a content restriction is applied."""
+    audiobook: Audiobook | None
+    """The audiobook on which this chapter appears. Not present when fetching an audiobook."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Chapter:
+        return cls(
+            payload["audio_preview_url"],
+            payload["chapter_number"],
+            payload["description"],
+            payload["html_description"],
+            datetime.timedelta(milliseconds=payload["duration_ms"]),
+            payload["explicit"],
+            ExternalURLs.from_payload(payload["external_urls"]),
+            payload["href"],
+            payload["id"],
+            [Image.from_payload(im) for im in payload["images"]],
+            payload["is_playable"],
+            payload["languages"],
+            payload["name"],
+            utils.datetime_from_timestamp(payload["release_date"]),
+            enums.ReleaseDatePrecision(payload["release_date_precision"]),
+            ResumePoint.from_payload(res)
+            if (res := payload.get("resume_point"))
+            else None,
+            payload["uri"],
+            Restrictions.from_payload(res)
+            if (res := payload.get("restrictions"))
+            else None,
+            Audiobook.from_payload(aud) if (aud := payload.get("audiobook")) else None,
+        )
+
+
+@attrs.frozen
 class Copyright(ModelBase):
     """Copyright statements."""
 
@@ -278,6 +431,20 @@ class Image(ModelBase):
             payload["url"],
             payload["height"],
             payload["width"],
+        )
+
+
+@attrs.frozen
+class Narrator(ModelBase):
+    """Author information."""
+
+    name: str
+    """The name of the narrator."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> Narrator:
+        return cls(
+            payload["name"],
         )
 
 
