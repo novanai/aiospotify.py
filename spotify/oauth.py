@@ -144,7 +144,7 @@ class AuthorizationCodeFlow(rest.REST):
                 data["access_token"],
                 data["token_type"],
                 datetime.timedelta(seconds=data["expires_in"]),
-                data["scope"].split(" "),
+                scope.split(" ") if (scope := data.get("scope")) else [],
                 data["refresh_token"],
                 client_id=client_id,
                 client_secret=client_secret,
