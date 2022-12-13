@@ -172,9 +172,9 @@ class AudioAnalysisMeta(ModelBase):
     """A detailed status code for this track. If analysis data is missing, this code may explain why."""
     status_code: int
     """The return code of the analyzer process. ``0`` if successful, ``1`` if any errors occurred."""
-    timestamp: int  # TODO: datetime
-    """The Unix timestamp (in seconds) at which this track was analyzed."""
-    analysis_time: float  # TODO: datetime
+    timestamp: datetime.datetime
+    """The time at which this track was analyzed."""
+    analysis_time: datetime.timedelta
     """The amount of time taken to analyze this track."""
     input_process: str
     """The method used to read the track's audio data."""
@@ -186,8 +186,8 @@ class AudioAnalysisMeta(ModelBase):
             payload["platform"],
             payload["detailed_status"],
             payload["status_code"],
-            payload["timestamp"],
-            payload["analysis_time"],
+            datetime.datetime.fromtimestamp(payload["timestamp"]),
+            datetime.timedelta(seconds=payload["analysis_time"]),
             payload["input_process"],
         )
 
@@ -608,9 +608,9 @@ class AudioFeatures(ModelBase):
     entire track and are useful for comparing relative loudness of tracks. Loudness is the quality
     of a sound that is the primary psychological correlate of physical strength (amplitude). Values
     typically range between ``-60`` and ``0`` db."""
-    mode: int  # TODO: Enum
+    mode: enums.TrackMode
     """Mode indicates the modality (major or minor) of a track, the type of scale from which its
-    melodic content is derived. Major is represented by 1 and minor is ``0``."""
+    melodic content is derived. Major is represented by ``1`` and minor is ``0``."""
     speechiness: float
     """Speechiness detects the presence of spoken words in a track. The more exclusively speech-like
     the recording (e.g. talk show, audio book, poetry), the closer to ``1.0`` the attribute value. Values
@@ -647,7 +647,7 @@ class AudioFeatures(ModelBase):
             payload["key"],
             payload["liveness"],
             payload["loudness"],
-            payload["mode"],
+            enums.TrackMode(payload["mode"]),
             payload["speechiness"],
             payload["tempo"],
             payload["time_signature"],
@@ -749,14 +749,14 @@ class Copyright(ModelBase):
 
     text: str
     """The copyright text for this content."""
-    type: str  # TODO: Use enum
-    """The type of copyright: C = the copyright, P = the sound recording (performance) copyright."""
+    type: enums.CopyrightType
+    """The type of copyright."""
 
     @classmethod
     def from_payload(cls, payload: dict[str, typing.Any]) -> Copyright:
         return cls(
             payload["text"],
-            payload["type"],
+            enums.CopyrightType(payload["type"]),
         )
 
 
@@ -829,6 +829,23 @@ class Episode(ModelBase):
             if (res := payload.get("restrictions"))
             else None,
             Show.from_payload(sho) if (sho := payload.get("show")) else None,
+        )
+
+
+@attrs.frozen
+class ExplicitContent(ModelBase):
+    """Explicit content settings."""
+
+    filter_enabled: bool
+    """When ``True``, indicates that explicit content should not be played."""
+    filter_locked: bool
+    """When ``True``, indicates that the explicit content setting is locked and can't be changed by the user."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> ExplicitContent:
+        return cls(
+            payload["filter_enabled"],
+            payload["filter_locked"],
         )
 
 
@@ -1065,12 +1082,11 @@ class Restrictions(ModelBase):
 
     reason: enums.Reason
     """The reason for the restriction."""
-    # TODO: Safely handle unknown values
 
     @classmethod
     def from_payload(cls, payload: dict[str, typing.Any]) -> Restrictions:
         return cls(
-            payload["reason"],
+            enums.Reason.from_payload(payload["reason"]),
         )
 
 
@@ -1264,4 +1280,55 @@ class Track(ModelBase):
             payload["track_number"],
             payload["uri"],
             payload["is_local"],
+        )
+
+
+@attrs.frozen
+class User(ModelBase):
+    """A user."""
+
+    country: str | None
+    """The country of the user, as set in the user's account profile. An `ISO 3166-1 alpha-2 country code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_. This field is only available when the current user has granted access to the ``user-read-private`` scope."""
+    display_name: str | None
+    """The name displayed on the user's profile. ``None`` if not available."""
+    email: str | None
+    """The user's email address, as entered by the user when creating their account.
+    This field is only available when the current user has granted access to the user-read-email scope.
+    
+    .. warning::
+
+        This email address is unverified; there is no proof that it actually belongs to the user."""
+    explicit_content: ExplicitContent | None
+    """The user's explicit content settings. This field is only available when the current user has granted access to the user-read-private scope."""
+    external_urls: ExternalURLs
+    """Known external URLs for this user."""
+    followers: Followers
+    """Information about the followers of the user."""
+    href: str
+    """A link to the Web API endpoint for this user."""
+    id: str
+    """The Spotify user ID for the user."""
+    images: list[Image]
+    """The user's profile image."""
+    product: str | None
+    """The user's Spotify subscription level: "premium", "free", etc. (The subscription level "open" can be considered the same as "free".) This field is only available when the current user has granted access to the user-read-private scope."""
+    uri: str
+    """The Spotify URI for the user."""
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, typing.Any]) -> User:
+        return cls(
+            payload.get("country"),
+            payload.get("display_name"),
+            payload.get("email"),
+            ExplicitContent.from_payload(exp)
+            if (exp := payload.get("explicit_content"))
+            else None,
+            ExternalURLs.from_payload(payload["external_urls"]),
+            Followers.from_payload(payload["followers"]),
+            payload["href"],
+            payload["id"],
+            [Image.from_payload(im) for im in payload["images"]],
+            payload.get("product"),
+            payload["uri"],
         )

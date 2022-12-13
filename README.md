@@ -16,7 +16,7 @@ The endpoints which have yet to be covered
 * [x] Chapters
 * [x] Tracks
 * [ ] Search
-* [ ] Users
+* [x] Users
 * [ ] Playlists
 * [ ] Categories
 * [ ] Genres

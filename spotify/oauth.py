@@ -6,7 +6,7 @@ import urllib.parse as parse
 
 import aiohttp
 
-from spotify import rest, utils
+from spotify import enums, rest, utils
 
 
 def build_auth_token(client_id: str, client_secret: str) -> str:
@@ -46,7 +46,7 @@ class AuthorizationCodeFlow(rest.REST):
         code_challenge: str | None = None,
         *,
         state: str | None = None,
-        scopes: list[str] | None = None,
+        scopes: list[enums.Scope] | None = None,
         show_dialog: bool | None = None,
     ) -> str:
         """Build an authorization code flow url from the given parameters.
@@ -61,8 +61,8 @@ class AuthorizationCodeFlow(rest.REST):
             Code challenge. **Only required for PKCE.**
         state : str, optional
             This provides protection against attacks such as cross-site request forgery.
-        scopes : list[str], optional
-            A list of scopes. TODO: Change once I introduce enums
+        scopes : list[enums.Scope], optional
+            The scopes to request.
         show_dialog : bool, optional
             Whether or not to force the user to approve the app again if they've already done so.
 
@@ -76,7 +76,7 @@ class AuthorizationCodeFlow(rest.REST):
             "response_type": "code",
             "redirect_uri": redirect_uri,
             "state": state,
-            "scope": " ".join(scopes) if scopes else None,
+            "scope": " ".join(scope.value for scope in scopes) if scopes else None,
             "show_dialog": show_dialog,
         }
         if code_challenge:
@@ -144,7 +144,9 @@ class AuthorizationCodeFlow(rest.REST):
                 data["access_token"],
                 data["token_type"],
                 datetime.timedelta(seconds=data["expires_in"]),
-                scope.split(" ") if (scope := data.get("scope")) else [],
+                [enums.Scope(scope) for scope in scopes.split(" ")]
+                if (scopes := data.get("scope"))
+                else [],
                 data["refresh_token"],
                 client_id=client_id,
                 client_secret=client_secret,
@@ -163,7 +165,7 @@ class AuthorizationCodeFlowAccessManager:
         How the access token may be used.
     expires_in : datetime.timedelta
         The time period for which the access token is valid.
-    scopes : list[str]
+    scopes : list[enums.Scope]
         A list of scopes which have been granted for the access token.
     refresh_token : str
         Used to refresh the access token once it has expired.
@@ -178,7 +180,7 @@ class AuthorizationCodeFlowAccessManager:
         access_token: str,
         token_type: str,
         expires_in: datetime.timedelta,
-        scopes: list[str],  # TODO: Update with Scope enum
+        scopes: list[enums.Scope],
         refresh_token: str,
         *,
         client_id: str,
@@ -223,7 +225,11 @@ class AuthorizationCodeFlowAccessManager:
             data = await r.json()
             self.access_token = data["access_token"]
             self.token_type = data["token_type"]
-            self.scopes = data["scope"].split(" ")
+            self.scopes = (
+                [enums.Scope(scope) for scope in scopes.split(" ")]
+                if (scopes := data.get("scope"))
+                else [],
+            )
             self.expires_in = datetime.timedelta(seconds=data["expires_in"])
             self.expires_at = (
                 datetime.datetime.now(datetime.timezone.utc) + self.expires_in

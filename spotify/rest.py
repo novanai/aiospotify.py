@@ -5,10 +5,10 @@ import typing as t
 import aiohttp
 
 import spotify
-from spotify import errors, models, utils
+from spotify import enums, errors, models, utils
 
 if t.TYPE_CHECKING:
-    from spotify import enums, oauth
+    from spotify import oauth
 
 import json
 
@@ -46,18 +46,18 @@ class REST:
                 "Content-Type": "application/json",
             },
         ) as r:
-            # No data to load, but status 200 OK
-            # TODO: make a custom error for this
-            try:
-                data = await r.json()
-            except aiohttp.ContentTypeError:
-                return
-
-            # json.dump(data, open("./samples/sample.json", "w"), indent=4)
+            data = await r.json() if r.content_type == "application/json" else None
 
             if not r.ok:
-                raise errors.APIError.from_payload(data["error"])
-            return data
+                if data and data.get("error"):
+                    data = data["error"]
+                else:
+                    data = {"status": r.status, "message": r.reason}
+                raise errors.APIError.from_payload(data)
+
+            if data:
+                json.dump(data, open("./samples/sample.json", "w"), indent=4)
+                return data
 
     async def get(self, url: str, query: dict[str, t.Any]) -> t.Any:
         return await self.request("GET", url, query)
@@ -98,7 +98,7 @@ class REST:
         Parameters
         ----------
         album_ids : list[str]
-            A list of album IDs.
+            The IDs of the albums.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -184,13 +184,13 @@ class REST:
     async def save_albums_for_user(
         self,
         album_ids: list[str],
-    ) -> None:  # TODO: Maybe return a status code on success?
+    ) -> None:
         """Save one or more albums to the current user's 'Your Music' library.
 
         Parameters
         ----------
         album_ids : list[str]
-            A list of album IDs. Maximum: 50.
+            The IDs of the albums. Maximum: 50.
         """
         await self.put("me/albums", {"ids": album_ids})
 
@@ -200,7 +200,7 @@ class REST:
         Parameters
         ----------
         album_ids : list[str]
-            A list of albums IDs. Maximum: 50.
+            The IDs of the albums. Maximum: 50.
         """
         await self.delete("me/albums", {"ids": album_ids})
 
@@ -210,12 +210,12 @@ class REST:
         Parameters
         ----------
         album_ids : list[str]
-            A list of albums IDs. Maximum: 20.
+            The IDs of the albums. Maximum: 20.
 
         Returns
         -------
         list[bool]
-            A list of booleans.
+            A list of booleans dictating whether or not the corresponding albums are already saved.
         """
         return await self.get("me/albums/contains", {"ids": album_ids})
 
@@ -226,12 +226,13 @@ class REST:
         limit: int | None = None,
         offset: int | None = None,
     ) -> models.Paginator[models.Album]:
-        """Get a list of new album releases featured in Spotify (shown, for example, on a Spotify player's "Browse" tab).
+        """Get a list of new album releases featured in Spotify (shown, for example, on a Spotify
+        player's "Browse" tab).
 
         Parameters
         ----------
         country : str, optional
-            Only get content relevant to this country.
+            Only get content relevant to that country.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
         limit : int, optional
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
@@ -274,7 +275,7 @@ class REST:
         Parameters
         ----------
         artist_ids : list[str]
-            A list of artist IDs.
+            The IDs of the artists.
 
         Returns
         -------
@@ -349,7 +350,7 @@ class REST:
         Returns
         -------
         list[models.Track]
-            A list of tracks.
+            The requested tracks.
         """
         return [
             models.Track.from_payload(tra)
@@ -370,7 +371,7 @@ class REST:
         Returns
         -------
         list[models.Artist]
-            A list of artists.
+            The requested artists.
         """
         return [
             models.Artist.from_payload(art)
@@ -407,7 +408,7 @@ class REST:
         Parameters
         ----------
         show_ids : list[str]
-            A list of show IDs.
+            The IDs of the shows.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -448,8 +449,8 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Track]
-            A paginator who's items are a list of tracks.
+        models.Paginator[models.Episode]
+            A paginator who's items are a list of episodes.
         """
         return models.Paginator.from_payload(
             await self.get(
@@ -499,7 +500,7 @@ class REST:
         Parameters
         ----------
         show_ids : list[str]
-            A list of show IDs. Maximum: 50.
+            The IDs of the shows. Maximum: 50.
         """
         await self.put("me/shows", {"ids": ",".join(show_ids)})
 
@@ -511,7 +512,7 @@ class REST:
         Parameters
         ----------
         show_ids : list[str]
-            A list of shows IDs. Maximum: 50.
+            The IDs of the shows. Maximum: 50.
         market : str, optional
             Only modify content that is available in that market (I think, I'm honestly not sure why this field is included here).
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -524,12 +525,12 @@ class REST:
         Parameters
         ----------
         show_ids : list[str]
-            A list of shows IDs. Maximum: 20.
+            The IDs of the shows. Maximum: 20.
 
         Returns
         -------
         list[bool]
-            A list of booleans.
+            A list of booleans dictating whether or not the corresponding shows are already saved.
         """
         return await self.get("me/shows/contains", {"ids": ",".join(show_ids)})
 
@@ -563,7 +564,7 @@ class REST:
         Parameters
         ----------
         episode_ids : list[str]
-            A list of episode IDs. Maximum: 50.
+            The IDs of the episodes. Maximum: 50.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -594,7 +595,6 @@ class REST:
         .. warning::
 
             This API endpoint is in **beta** and could change without warning.
-            I cannot guarantee that this method will always work.
 
         Parameters
         ----------
@@ -627,12 +627,11 @@ class REST:
         .. warning::
 
             This API endpoint is in **beta** and could change without warning.
-            I cannot guarantee that this method will always work.
 
         Parameters
         ----------
         episode_ids : list[str]
-            A list of episode IDs. Maximum: 50.
+            The IDs of the episodes. Maximum: 50.
         """
         await self.put("me/episodes", {"ids": ",".join(episode_ids)})
 
@@ -642,12 +641,11 @@ class REST:
         .. warning::
 
             This API endpoint is in **beta** and could change without warning.
-            I cannot guarantee that this method will always work.
 
         Parameters
         ----------
         episode_ids : list[str]
-            A list of episodes IDs. Maximum: 50.
+            The IDs of the episodes. Maximum: 50.
         """
         await self.delete("me/episodes", {"ids": ",".join(episode_ids)})
 
@@ -657,17 +655,16 @@ class REST:
         .. warning::
 
             This API endpoint is in **beta** and could change without warning.
-            I cannot guarantee that this method will always work.
 
         Parameters
         ----------
         episode_ids : list[str]
-            A list of episodes IDs. Maximum: 50.
+            The IDs of the episodes. Maximum: 50.
 
         Returns
         -------
         list[bool]
-            A list of booleans.
+            A list of booleans dictating whether or not the corresponding episodes are already saved.
         """
         return await self.get("me/episodes/contains", {"ids": ",".join(episode_ids)})
 
@@ -709,7 +706,7 @@ class REST:
         Parameters
         ----------
         audiobook_ids : list[str]
-            A list of audiobook IDs. Maximum: 50.
+            The IDs of the audiobooks. Maximum: 50.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -801,7 +798,7 @@ class REST:
         Parameters
         ----------
         audiobook_ids : list[str]
-            A list of audiobook IDs. Maximum: 50.
+            The IDs of the audiobooks. Maximum: 50.
         """
         await self.put("me/audiobooks", {"ids": ",".join(audiobook_ids)})
 
@@ -814,7 +811,7 @@ class REST:
         Parameters
         ----------
         audiobook_ids : list[str]
-            A list of audiobooks IDs. Maximum: 50.
+            The IDs of the audiobooks. Maximum: 50.
         """
         await self.delete("me/audiobooks", {"ids": ",".join(audiobook_ids)})
 
@@ -826,12 +823,12 @@ class REST:
         Parameters
         ----------
         audiobook_ids : list[str]
-            A list of audiobooks IDs. Maximum: 50.
+            The IDs of the audiobooks. Maximum: 50.
 
         Returns
         -------
         list[bool]
-            A list of booleans.
+            A list of booleans dictating whether or not the corresponding audiobooks are already saved.
         """
         return await self.get(
             "me/audiobooks/contains", {"ids": ",".join(audiobook_ids)}
@@ -875,7 +872,7 @@ class REST:
         Parameters
         ----------
         chapter_ids : list[str]
-            A list of chapter IDs. Maximum: 50.
+            The IDs of the chapters. Maximum: 50.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -924,7 +921,7 @@ class REST:
         Parameters
         ----------
         track_ids : list[str]
-            A list of track IDs. maximum: 50.
+            The IDs of the tracks. Maximum: 50.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -981,7 +978,7 @@ class REST:
         Parameters
         ----------
         track_ids : list[str]
-            A list of track IDs. Maximum: 50.
+            The IDs of the tracks. Maximum: 50.
         """
         await self.put("me/tracks", {"ids": track_ids})
 
@@ -991,7 +988,7 @@ class REST:
         Parameters
         ----------
         track_ids : list[str]
-            A list of tracks IDs. Maximum: 50.
+            The IDs of the tracks. Maximum: 50.
         """
         await self.delete("me/tracks", {"ids": track_ids})
 
@@ -1001,12 +998,12 @@ class REST:
         Parameters
         ----------
         track_ids : list[str]
-            A list of tracks IDs. Maximum: 50.
+            The IDs of the tracks. Maximum: 50.
 
         Returns
         -------
         list[bool]
-            A list of booleans.
+            A list of booleans dictating whether or not the corresponding tracks are already saved.
         """
         return await self.get("me/tracks/contains", {"ids": track_ids})
 
@@ -1035,7 +1032,7 @@ class REST:
         Parameters
         ----------
         track_ids : list[str]
-            A list of track IDs. Maximum: 100.
+            The IDs of the tracks. Maximum: 100.
 
         Returns
         -------
@@ -1120,21 +1117,30 @@ class REST:
         target_time_signature: int | None = None,
         target_valence: float | None = None,
     ) -> models.Recommendation:
-        """Recommendations are generated based on the available information for a given seed entity and matched against similar artists and tracks. If there is sufficient information about the provided seeds, a list of tracks will be returned together with pool size details.
+        """Recommendations are generated based on the available information for a given seed entity
+        and matched against similar artists and tracks. If there is sufficient information about the
+        provided seeds, a list of tracks will be returned together with pool size details.
 
-        For artists and tracks that are very new or obscure there might not be enough data to generate a list of tracks.
+        For artists and tracks that are very new or obscure there might not be enough data to generate
+        a list of tracks.
 
         Parameters
         ----------
         seed_artists : list[str]
-            A list of artist IDs for seed artists. Up to 5 seed values may be provided in any combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
+            A list of artist IDs for seed artists. Up to 5 seed values may be provided in any
+            combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
         seed_genres : list[str]
-            A list of any genres in the set of available genre seeds. Up to 5 seed values may be provided in any combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
+            A list of any genres in the set of available genre seeds. Up to 5 seed values may be
+            provided in any combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
             # TODO: link to available_genre_seeds endpoint.
         seed_tracks : list[str]
-            A list of track IDs for seed tracks. Up to 5 seed values may be provided in any combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
+            A list of track IDs for seed tracks. Up to 5 seed values may be provided in any combination
+            of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
         limit : int, optional
-            The target size of the list of recommended tracks. For seeds with unusually small pools or when highly restrictive filtering is applied, it may be impossible to generate the requested number of recommended tracks. Debugging information for such cases is available in the response. Default: 20. Minimum: 1. Maximum: 100.
+            The target size of the list of recommended tracks. For seeds with unusually small pools or
+            when highly restrictive filtering is applied, it may be impossible to generate the requested
+            number of recommended tracks. Debugging information for such cases is available in the
+            response. Default: 20. Minimum: 1. Maximum: 100.
         market : str, optional
             Only get content that is available in that market.
             Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
@@ -1240,4 +1246,262 @@ class REST:
                     "target_valence": target_valence,
                 },
             )
+        )
+
+    async def get_current_users_profile(self) -> models.User:
+        """Get detailed profile information about the current user.
+
+        Returns
+        -------
+        models.User
+            The current user.
+        """
+        return models.User.from_payload(await self.get("me", {}))
+
+    @t.overload
+    async def get_users_top_items(
+        self,
+        type: t.Literal[enums.TopItemType.ARTISTS] = enums.TopItemType.ARTISTS,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        time_range: enums.TimeRange | None = None,
+    ) -> models.Paginator[models.Artist]:
+        ...
+
+    @t.overload
+    async def get_users_top_items(
+        self,
+        type: t.Literal[enums.TopItemType.TRACKS] = enums.TopItemType.TRACKS,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        time_range: enums.TimeRange | None = None,
+    ) -> models.Paginator[models.Track]:
+        ...
+
+    async def get_users_top_items(
+        self,
+        type: enums.TopItemType = enums.TopItemType.ARTISTS,
+        *,
+        limit: int | None = None,
+        offset: int | None = None,
+        time_range: enums.TimeRange | None = None,
+    ) -> models.Paginator:
+        """Get the current user's top artists or tracks based on calculated affinity.
+
+        Parameters
+        ----------
+        type : enums.TopItemType, optional
+            The type of entity to return. Default: enums.TopItemType.ARTISTS
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item)
+        time_range : enums.TimeRange, optional
+            Over what time frame the affinities are computed. Default: ``enums.TimeRange.MEDIUM_TERM``
+
+        Returns
+        -------
+        models.Paginator
+            A paginator who's items are a list of tracks or artists.
+        """
+        return models.Paginator.from_payload(
+            await self.get(
+                f"me/top/{type.value}",
+                {
+                    "limit": limit,
+                    "offset": offset,
+                    "time_range": time_range.value if time_range else None,
+                },
+            ),
+            models.Artist if type == enums.TopItemType.ARTISTS else models.Track,
+        )
+
+    async def get_users_profile(
+        self,
+        user_id: str,
+    ) -> models.User:
+        """Get public profile information about a Spotify user.
+
+        Parameters
+        ----------
+        user_id : str
+            The ID of the user.
+
+        Returns
+        -------
+        models.User
+            The requested user.
+        """
+        return models.User.from_payload(await self.get(f"users/{user_id}", {}))
+
+    async def follow_playlist(
+        self,
+        playlist_id: str,
+        public: bool | None = None,
+    ) -> None:
+        """Add the current user as a follower of a playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        public : bool, optional
+            Whether or not the playlist will be included in the user's public playlists. Default: ``True``
+        """
+        await self.put(f"playlists/{playlist_id}/followers", {"public": public})
+
+    async def unfollow_playlist(
+        self,
+        playlist_id: str,
+    ) -> None:
+        """Remove the current user as a follower of a playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        """
+        await self.delete(f"playlists/{playlist_id}/followers", {})
+
+    async def get_followed_artists(
+        self,
+        after: str | None = None,
+        limit: int | None = None,
+    ) -> models.Paginator[models.Artist]:
+        """Get the current user's followed artists.
+
+        Parameters
+        ----------
+        after : str, optional
+            The last artist ID retrieved from the previous request.
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+
+        Returns
+        -------
+        models.Paginator[models.Artist]
+            A paginator who's items are a list of artists.
+        """
+        return models.Paginator.from_payload(
+            await self.get("me/following", {"after": after, "limit": limit}),
+            models.Artist,
+        )
+
+    async def follow_artists(
+        self,
+        artist_ids: list[str],
+    ) -> None:
+        """Add the current user as a follower of one or more artists.
+
+        Parameters
+        ----------
+        artist_ids : list[str]
+            The IDs of the artists. Maximum: 50.
+        """
+        await self.put("me/following", {"ids": ",".join(artist_ids), "type": "artist"})
+
+    async def follow_users(
+        self,
+        user_ids: list[str],
+    ) -> None:
+        """Add the current user as a follower of one or more Spotify users.
+
+        Parameters
+        ----------
+        user_ids : list[str]
+            The IDs of the users. Maximum: 50.
+        """
+        await self.put("me/following", {"ids": ",".join(user_ids), "type": "user"})
+
+    async def unfollow_artists(
+        self,
+        artist_ids: list[str],
+    ) -> None:
+        """Remove the current user as a follower of one or more artists.
+
+        Parameters
+        ----------
+        artist_ids : list[str]
+            The IDs of the artists. Maximum: 50.
+        """
+        await self.delete(
+            "me/following", {"ids": ",".join(artist_ids), "type": "artist"}
+        )
+
+    async def unfollow_users(
+        self,
+        user_ids: list[str],
+    ) -> None:
+        """Remove the current user as a follower of one or more Spotify users.
+
+        Parameters
+        ----------
+        user_ids : list[str]
+            The IDs of the users. Maximum: 50.
+        """
+        await self.delete("me/following", {"ids": ",".join(user_ids), "type": "user"})
+
+    async def check_if_user_follows_artists(
+        self,
+        artist_ids: list[str],
+    ) -> list[bool]:
+        """Check to see if the current user is following one or more artists.
+
+        Parameters
+        ----------
+        artist_ids : list[str]
+            The IDs of the artists. Maximum: 50.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans dictating whether or not the current user has followed the corresponding artists.
+        """
+        return await self.get(
+            "me/following/contains", {"ids": ",".join(artist_ids), "type": "artist"}
+        )
+
+    async def check_if_user_follows_users(
+        self,
+        user_ids: list[str],
+    ) -> list[bool]:
+        """Check to see if the current user is following one or more Spotify users.
+
+        Parameters
+        ----------
+        user_ids : list[str]
+            The IDs of the users. Maximum: 50.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans dictating whether or not the current user has followed the corresponding users.
+        """
+        return await self.get(
+            "me/following/contains", {"ids": ",".join(user_ids), "type": "user"}
+        )
+
+    async def check_if_users_follow_playlist(
+        self,
+        playlist_id: str,
+        user_ids: list[str],
+    ) -> list[bool]:
+        """Check to see if one or more Spotify users are following a specified playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        user_ids : list[str]
+            The IDs of the users. Maximum: 5.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans dictating whether or not the corresponding users have followed the playlist.
+        """
+        return await self.get(
+            f"playlists/{playlist_id}/followers/contains", {"ids": ",".join(user_ids)}
         )
