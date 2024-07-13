@@ -1,24 +1,8 @@
 # AIOSpotify
 
-An asynchronous Spotify Web API wrapper.
+An asynchronous Spotify Web API wrapper for Python.
 
-⚠️ Still under construction
+## To-Do List
 
-## TODO List
-
-The endpoints which have yet to be covered
-
-* [x] Albums
-* [x] Artists
-* [x] Shows
-* [x] Episodes
-* [x] Audiobooks
-* [x] Chapters
-* [x] Tracks
-* [ ] Search
-* [x] Users
-* [ ] Playlists
-* [ ] Categories
-* [ ] Genres
-* [ ] Player
-* [ ] Markets
+* [ ] Add extra methods to Paginator *(for fetching all items, lazy iteration etc)*
+* [ ] URI helper class

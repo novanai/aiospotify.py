@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-import typing
+import pydantic
 
-import attrs
-
-
-@attrs.frozen
+@pydantic.dataclasses.dataclass
 class APIError(Exception):
     status: int
-    message: str
+    message: str | None
 
     def __str__(self) -> str:
         return f"Status: {self.status}. Message: {self.message}"
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> APIError:
-        return cls(
-            payload["status"],
-            payload["message"],
-        )

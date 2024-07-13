@@ -1,76 +1,91 @@
 from __future__ import annotations
 
-import typing as t
 
 import aiohttp
+import typing
+import json as json_
+import base64
+import datetime
 
 import spotify
-from spotify import enums, errors, models, utils
+from spotify import enums, errors, models, utils, internals, types as types_
 
-if t.TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from spotify import oauth
 
-import json
-
-
 class REST:
-    """An implementation to make API calls with.
+    """Implementation to make API calls with.
 
     Parameters
     ----------
-    access_manager : oauth.AuthorizationCodeFlowAccessManager | oauth.ClientCredentialsFlowAccessManager
+    access_flow : oauth.AuthorizationCodeFlow | oauth.ClientCredentialsFlow
         Access manager to use for requests.
     """
 
     def __init__(
         self,
-        access_manager: oauth.AuthorizationCodeFlowAccessManager
-        | oauth.ClientCredentialsFlowAccessManager,
+        access_flow: oauth.AuthorizationCodeFlow | oauth.ClientCredentialsFlow,
     ) -> None:
-        self.access = access_manager
+        self.access_flow = access_flow
 
-    async def check_access(self) -> None:
-        if not hasattr(self, "access"):
-            raise RuntimeError("Didn't request an access token, did you? Idot.")
-        await self.access.validate_token()
+        self._session: aiohttp.ClientSession | None = None
 
-    async def request(self, method: str, url: str, query: dict[str, t.Any]) -> t.Any:
-        await self.check_access()
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        if not self._session:
+            self._session = aiohttp.ClientSession()
 
-        async with aiohttp.request(
+        return self._session
+
+    async def request(
+        self, 
+        method: str, 
+        url: str,
+        *,
+        params: dict[str, typing.Any] | None = None, 
+        json: dict[str, typing.Any] | None = None,
+        data: bytes | None = None,
+    ) -> bytes | None:  # pyright: ignore[reportGeneralTypeIssues]
+        await self.access_flow.validate_token()
+
+        async with self.session.request(
             method,
             f"{spotify.BASE_URL}/{url}",
-            params=utils.dict_work(query),
+            params=utils.process_dict(params) if params is not None else None,
+            json=utils.process_dict(json) if json is not None else None,
+            data=data if data is not None else None,
             headers={
-                "Authorization": f"Bearer {self.access.access_token}",
+                "Authorization": f"Bearer {self.access_flow.access_token}",
                 "Content-Type": "application/json",
             },
         ) as r:
-            data = await r.json() if r.content_type == "application/json" else None
+            data = await r.content.read()
 
-            if not r.ok:
-                if data and data.get("error"):
-                    data = data["error"]
-                else:
-                    data = {"status": r.status, "message": r.reason}
-                raise errors.APIError.from_payload(data)
-
-            if data:
-                json.dump(data, open("./samples/sample.json", "w"), indent=4)
+            if r.content_type == "application/json" and r.ok:
                 return data
+            elif r.content_type == "application/json":
+                json_data = json_.loads(data)
+                if json_data.get("error"):
+                    json_data = json_data["error"]
+                else:
+                    json_data = {"status": r.status, "message": r.reason}
+                raise errors.APIError(**json_data)  # pyright: ignore[reportArgumentType]
 
-    async def get(self, url: str, query: dict[str, t.Any]) -> t.Any:
-        return await self.request("GET", url, query)
+            r.raise_for_status()
 
-    async def put(self, url: str, query: dict[str, t.Any]) -> t.Any:
-        return await self.request("PUT", url, query)
+    async def get(self, url: str, *, params: dict[str, typing.Any] | None = None, json: dict[str, typing.Any] | None = None, data: bytes | None = None) -> bytes | None:
+        return await self.request("GET", url, params=params, json=json, data=data)
+    
+    async def post(self, url: str, *, params: dict[str, typing.Any] | None = None, json: dict[str, typing.Any] | None = None, data: bytes | None = None) -> bytes | None:
+        return await self.request("POST", url, params=params, json=json, data=data)
 
-    async def delete(self, url: str, query: dict[str, t.Any]) -> t.Any:
-        return await self.request("DELETE", url, query)
+    async def put(self, url: str, *, params: dict[str, typing.Any] | None = None, json: dict[str, typing.Any] | None = None, data: bytes | None = None) -> bytes | None:
+        return await self.request("PUT", url, params=params, json=json, data=data)
 
-    async def get_album(
-        self, album_id: str, *, market: str | None = None
-    ) -> models.Album:
+    async def delete(self, url: str, *, params: dict[str, typing.Any] | None = None, json: dict[str, typing.Any] | None = None, data: bytes | None = None) -> bytes | None:
+        return await self.request("DELETE", url, params=params, json=json, data=data)
+
+    async def get_album(self, album_id: str, *, market: str | types_.MissingType = types_.MISSING) -> models.Album:
         """Get Spotify catalog information for a single album.
 
         Parameters
@@ -86,12 +101,12 @@ class REST:
         models.Album
             The requested album.
         """
-        return models.Album.from_payload(
-            await self.get(f"albums/{album_id}", {"market": market})
-        )
+        album = await self.get(f"albums/{album_id}", params={"market": market})
+        assert album is not None
+        return models.Album.model_validate_json(album)
 
     async def get_several_albums(
-        self, album_ids: list[str], *, market: str | None = None
+        self, album_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
     ) -> list[models.Album]:
         """Get Spotify catalog information for several albums.
 
@@ -108,21 +123,20 @@ class REST:
         list[models.Album]
             The requested albums.
         """
-        return [
-            models.Album.from_payload(alb)
-            for alb in (
-                await self.get("albums", {"ids": ",".join(album_ids), "market": market})
-            )["albums"]
-        ]
+        albums = await self.get("albums", params={"ids": ",".join(album_ids), "market": market}) 
+        assert albums is not None
+        return internals._Albums.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            albums
+        ).albums
 
     async def get_album_tracks(
         self,
         album_id: str,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Track]:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SimpleTrack]:
         """Get Spotify catalog information about an album's tracks.
 
         Parameters
@@ -142,21 +156,20 @@ class REST:
         models.Paginator[models.Track]
             A paginator who's items are a list of tracks.
         """
-        return models.Paginator.from_payload(
-            await self.get(
+        tracks = await self.get(
                 f"albums/{album_id}/tracks",
-                {"limit": limit, "offset": offset, "market": market},
-            ),
-            models.Track,
-        )
+                params={"limit": limit, "offset": offset, "market": market},
+            )
+        assert tracks is not None
+        return models.Paginator[models.SimpleTrack].model_validate_json(tracks)
 
     async def get_users_saved_albums(
         self,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Album]:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SavedAlbum]:
         """Get a list of the albums saved in the current user's 'Your Music' library.
 
         Parameters
@@ -171,15 +184,12 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Album]
+        models.Paginator[models.SavedAlbum]
             A paginator who's items are a list of albums.
         """
-        return models.Paginator.from_payload(
-            await self.get(
-                "me/albums", {"limit": limit, "offset": offset, "market": market}
-            ),
-            models.Album,
-        )
+        albums = await self.get("me/albums", params={"limit": limit, "offset": offset, "market": market})
+        assert albums is not None
+        return models.Paginator[models.SavedAlbum].model_validate_json(albums)
 
     async def save_albums_for_user(
         self,
@@ -192,7 +202,7 @@ class REST:
         album_ids : list[str]
             The IDs of the albums. Maximum: 50.
         """
-        await self.put("me/albums", {"ids": album_ids})
+        await self.put("me/albums", params={"ids": ",".join(album_ids)})
 
     async def remove_users_saved_albums(self, album_ids: list[str]) -> None:
         """Remove one or more albums from the current user's 'Your Music' library.
@@ -202,7 +212,7 @@ class REST:
         album_ids : list[str]
             The IDs of the albums. Maximum: 50.
         """
-        await self.delete("me/albums", {"ids": album_ids})
+        await self.delete("me/albums", params={"ids": ",".join(album_ids)})
 
     async def check_users_saved_albums(self, album_ids: list[str]) -> list[bool]:
         """Check if one or more albums is already saved in the current user's 'Your Music' library.
@@ -217,15 +227,18 @@ class REST:
         list[bool]
             A list of booleans dictating whether or not the corresponding albums are already saved.
         """
-        return await self.get("me/albums/contains", {"ids": album_ids})
+        albums = await self.get("me/albums/contains", params={"ids": ",".join(album_ids)})
+        assert albums is not None
+        return json_.loads(albums)
+         
 
     async def get_new_releases(
         self,
         *,
-        country: str | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
-    ) -> models.Paginator[models.Album]:
+        country: str | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SimpleAlbum]:
         """Get a list of new album releases featured in Spotify (shown, for example, on a Spotify
         player's "Browse" tab).
 
@@ -241,18 +254,17 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Album]
+        models.Paginator[models.SimpleAlbum]
             A paginator who's items are a list of albums.
         """
-        return models.Paginator.from_payload(
-            (
-                await self.get(
-                    "browse/new-releases",
-                    {"country": country, "limit": limit, "offset": offset},
-                )
-            )["albums"],
-            models.Album,
-        )
+        albums = await self.get(
+                "browse/new-releases",
+                params={"country": country, "limit": limit, "offset": offset},
+            )
+        assert albums is not None
+        return internals._SimpleAlbumPaginator.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            albums  
+        ).paginator
 
     async def get_artist(self, artist_id: str) -> models.Artist:
         """Get Spotify catalog information for a single artist.
@@ -267,7 +279,9 @@ class REST:
         models.Artist
             The requested artist.
         """
-        return models.Artist.from_payload(await self.get(f"artists/{artist_id}", {}))
+        artist = await self.get(f"artists/{artist_id}")
+        assert artist is not None
+        return models.Artist.model_validate_json(artist)
 
     async def get_several_artists(self, artist_ids: list[str]) -> list[models.Artist]:
         """Get Spotify catalog information for several artists.
@@ -282,22 +296,21 @@ class REST:
         list[models.Artist]
             The requested artists.
         """
-        return [
-            models.Artist.from_payload(art)
-            for art in (await self.get("artists", {"ids": ",".join(artist_ids)}))[
-                "artists"
-            ]
-        ]
+        artists = await self.get("artists", params={"ids": ",".join(artist_ids)})
+        assert artists is not None
+        return internals._Artists.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            artists
+        ).artists
 
     async def get_artists_albums(
         self,
         artist_id: str,
         *,
-        include_groups: list[enums.AlbumGroup] | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Album]:
+        include_groups: list[enums.AlbumGroup] | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.ArtistAlbum]:
         """Get Spotify catalog information about an artist's albums.
 
         Parameters
@@ -305,7 +318,7 @@ class REST:
         artist_id : str
             The ID of the artist.
         include_groups : list[enums.AlbumGroup], optional
-            Used to filter the type of items returned. If not specified, all album types will be returned.
+            Used to filter the type of items returned. If not specified, all album types_ will be returned.
         limit : int, optional
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
         offset : int, optional
@@ -316,27 +329,25 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Album]
+        models.Paginator[models.ArtistAlbum]
             A paginator who's items are a list of albums.
         """
-        return models.Paginator.from_payload(
-            await self.get(
+        albums = await self.get(
                 f"artists/{artist_id}/albums",
-                {
+                params={
                     "include_groups": ",".join(g.value for g in include_groups)
-                    if include_groups
-                    else None,
+                    if not isinstance(include_groups, types_.MissingType)
+                    else types_.MISSING,
                     "limit": limit,
                     "offset": offset,
                     "market": market,
                 },
-            ),
-            models.Album,
-        )
+            )
+        assert albums is not None
+        return models.Paginator[models.ArtistAlbum].model_validate_json(albums)
 
-    async def get_artists_top_tracks(
-        self, artist_id: str, *, market: str
-    ) -> list[models.Track]:
+    # NOTE: market is required for this endpoint
+    async def get_artists_top_tracks(self, artist_id: str, *, market: str) -> list[models.TrackWithSimpleArtist]:
         """Get Spotify catalog information about an artist's top tracks.
 
         Parameters
@@ -352,12 +363,11 @@ class REST:
         list[models.Track]
             The requested tracks.
         """
-        return [
-            models.Track.from_payload(tra)
-            for tra in (
-                await self.get(f"artists/{artist_id}/top-tracks", {"market": market})
-            )["tracks"]
-        ]
+        tracks = await self.get(f"artists/{artist_id}/top-tracks", params={"market": market})
+        assert tracks is not None
+        return internals._Tracks.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            tracks
+        ).tracks
 
     async def get_artists_related_artists(self, artist_id: str) -> list[models.Artist]:
         """Get Spotify catalog information about artists similar to a given artist.
@@ -373,303 +383,14 @@ class REST:
         list[models.Artist]
             The requested artists.
         """
-        return [
-            models.Artist.from_payload(art)
-            for art in (await self.get(f"artists/{artist_id}/related-artists", {}))[
-                "artists"
-            ]
-        ]
-
-    async def get_show(self, show_id: str, *, market: str | None = None) -> models.Show:
-        """Get Spotify catalog information for a single show.
-
-        Parameters
-        ----------
-        show_id : str
-            The ID of the show.
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        models.Show
-            The requested show.
-        """
-        return models.Show.from_payload(
-            await self.get(f"shows/{show_id}", {"market": market})
-        )
-
-    async def get_several_shows(
-        self, show_ids: list[str], *, market: str | None = None
-    ) -> list[models.Show]:
-        """Get Spotify catalog information for several shows.
-
-        Parameters
-        ----------
-        show_ids : list[str]
-            The IDs of the shows.
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        list[models.Show]
-            The requested shows.
-        """
-        return [
-            models.Show.from_payload(sho)
-            for sho in (
-                await self.get("shows", {"ids": ",".join(show_ids), "market": market})
-            )["shows"]
-        ]
-
-    async def get_show_episodes(
-        self,
-        show_id: str,
-        *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Episode]:
-        """Get Spotify catalog information about an shows's episodes.
-
-        Parameters
-        ----------
-        show_id : str
-            The ID of the show.
-        limit : int, optional
-            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
-            The index of the first item to return. Default: 0 (the first item).
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        models.Paginator[models.Episode]
-            A paginator who's items are a list of episodes.
-        """
-        return models.Paginator.from_payload(
-            await self.get(
-                f"shows/{show_id}/episodes",
-                {"limit": limit, "offset": offset, "market": market},
-            ),
-            models.Episode,
-        )
-
-    async def get_users_saved_shows(
-        self,
-        *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Show]:
-        """Get a list of the shows saved in the current user's library.
-
-        Parameters
-        ----------
-        limit : int, optional
-            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
-            The index of the first item to return. Default: 0 (the first item).
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        models.Paginator[models.Show]
-            A paginator who's items are a list of shows.
-        """
-        return models.Paginator.from_payload(
-            await self.get(
-                "me/shows", {"limit": limit, "offset": offset, "market": market}
-            ),
-            models.Show,
-        )
-
-    async def save_shows_for_user(
-        self,
-        show_ids: list[str],
-    ) -> None:
-        """Save one or more shows to the current user's library.
-
-        Parameters
-        ----------
-        show_ids : list[str]
-            The IDs of the shows. Maximum: 50.
-        """
-        await self.put("me/shows", {"ids": ",".join(show_ids)})
-
-    async def remove_users_saved_shows(
-        self, show_ids: list[str], *, market: str | None = None
-    ) -> None:
-        """Remove one or more shows from the current user's library.
-
-        Parameters
-        ----------
-        show_ids : list[str]
-            The IDs of the shows. Maximum: 50.
-        market : str, optional
-            Only modify content that is available in that market (I think, I'm honestly not sure why this field is included here).
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        """
-        await self.delete("me/shows", {"ids": ",".join(show_ids), "market": market})
-
-    async def check_users_saved_shows(self, show_ids: list[str]) -> list[bool]:
-        """Check if one or more shows is already saved in the current user's library.
-
-        Parameters
-        ----------
-        show_ids : list[str]
-            The IDs of the shows. Maximum: 20.
-
-        Returns
-        -------
-        list[bool]
-            A list of booleans dictating whether or not the corresponding shows are already saved.
-        """
-        return await self.get("me/shows/contains", {"ids": ",".join(show_ids)})
-
-    async def get_episode(
-        self, episode_id: str, *, market: str | None = None
-    ) -> models.Episode:
-        """Get Spotify catalog information for a single episode.
-
-        Parameters
-        ----------
-        episode_id : str
-            The ID of the episode.
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        models.Episode
-            The requested episode.
-        """
-        return models.Episode.from_payload(
-            await self.get(f"episodes/{episode_id}", {"market": market})
-        )
-
-    async def get_several_episodes(
-        self, episode_ids: list[str], *, market: str | None = None
-    ) -> list[models.Episode]:
-        """Get Spotify catalog information for several episodes.
-
-        Parameters
-        ----------
-        episode_ids : list[str]
-            The IDs of the episodes. Maximum: 50.
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        list[models.Episode]
-            The requested episodes.
-        """
-        return [
-            models.Episode.from_payload(epi)
-            for epi in (
-                await self.get(
-                    "episodes", {"ids": ",".join(episode_ids), "market": market}
-                )
-            )["episodes"]
-        ]
-
-    async def get_users_saved_episodes(
-        self,
-        *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Episode]:
-        """Get a list of the episodes saved in the current user's library.
-
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
-
-        Parameters
-        ----------
-        limit : int, optional
-            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
-            The index of the first item to return. Default: 0 (the first item).
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-
-        Returns
-        -------
-        models.Paginator[models.Episode]
-            A paginator who's items are a list of episodes.
-        """
-        return models.Paginator.from_payload(
-            await self.get(
-                "me/episodes", {"limit": limit, "offset": offset, "market": market}
-            ),
-            models.Episode,
-        )
-
-    async def save_episodes_for_user(
-        self,
-        episode_ids: list[str],
-    ) -> None:
-        """Save one or more episodes to the current user's library.
-
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
-
-        Parameters
-        ----------
-        episode_ids : list[str]
-            The IDs of the episodes. Maximum: 50.
-        """
-        await self.put("me/episodes", {"ids": ",".join(episode_ids)})
-
-    async def remove_users_saved_episodes(self, episode_ids: list[str]) -> None:
-        """Remove one or more episodes from the current user's library.
-
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
-
-        Parameters
-        ----------
-        episode_ids : list[str]
-            The IDs of the episodes. Maximum: 50.
-        """
-        await self.delete("me/episodes", {"ids": ",".join(episode_ids)})
-
-    async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
-        """Check if one or more episodes is already saved in the current user's library.
-
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
-
-        Parameters
-        ----------
-        episode_ids : list[str]
-            The IDs of the episodes. Maximum: 50.
-
-        Returns
-        -------
-        list[bool]
-            A list of booleans dictating whether or not the corresponding episodes are already saved.
-        """
-        return await self.get("me/episodes/contains", {"ids": ",".join(episode_ids)})
+        artists = await self.get(f"artists/{artist_id}/related-artists")
+        assert artists is not None
+        return internals._Artists.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            artists
+        ).artists
 
     async def get_audiobook(
-        self, audiobook_id: str, *, market: str | None = None
+        self, audiobook_id: str, *, market: str | types_.MissingType = types_.MISSING
     ) -> models.Audiobook:
         """Get Spotify catalog information for a single audiobook.
 
@@ -690,12 +411,12 @@ class REST:
         models.Audiobook
             The requested audiobook.
         """
-        return models.Audiobook.from_payload(
-            await self.get(f"audiobooks/{audiobook_id}", {"market": market})
-        )
+        audiobook = await self.get(f"audiobooks/{audiobook_id}", params={"market": market})
+        assert audiobook is not None
+        return models.Audiobook.model_validate_json(audiobook)
 
     async def get_several_audiobooks(
-        self, audiobook_ids: list[str], *, market: str | None = None
+        self, audiobook_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
     ) -> list[models.Audiobook]:
         """Get Spotify catalog information for several audiobooks.
 
@@ -716,23 +437,20 @@ class REST:
         list[models.Audiobook]
             The requested audiobooks.
         """
-        return [
-            models.Audiobook.from_payload(aud)
-            for aud in (
-                await self.get(
-                    "audiobooks", {"ids": ",".join(audiobook_ids), "market": market}
-                )
-            )["audiobooks"]
-        ]
+        audiobooks = await self.get("audiobooks", params={"ids": ",".join(audiobook_ids), "market": market})
+        assert audiobooks is not None
+        return internals._Audiobooks.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            audiobooks
+        ).audiobooks
 
     async def get_audiobook_chapters(
         self,
         audiobook_id: str,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Chapter]:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SimpleChapter]:
         """Get Spotify catalog information about an audiobooks's chapters.
 
         .. note ::
@@ -753,23 +471,22 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Chapter]
+        models.Paginator[models.SimpleChapter]
             A paginator who's items are a list of chapters.
         """
-        return models.Paginator.from_payload(
-            await self.get(
-                f"audiobooks/{audiobook_id}/chapters",
-                {"limit": limit, "offset": offset, "market": market},
-            ),
-            models.Chapter,
+        chapters = await self.get(
+            f"audiobooks/{audiobook_id}/chapters",
+            params={"limit": limit, "offset": offset, "market": market},
         )
+        assert chapters is not None
+        return models.Paginator[models.SimpleChapter].model_validate_json(chapters)
 
     async def get_users_saved_audiobooks(
         self,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-    ) -> models.Paginator[models.Audiobook]:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SimpleAudiobook]:
         """Get a list of the audiobooks saved in the current user's library.
 
         Parameters
@@ -781,13 +498,12 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Audiobook]
+        models.Paginator[models.SimpleAudiobook]
             A paginator who's items are a list of audiobooks.
         """
-        return models.Paginator.from_payload(
-            await self.get("me/audiobooks", {"limit": limit, "offset": offset}),
-            models.Audiobook,
-        )
+        audiobooks = await self.get("me/audiobooks", params={"limit": limit, "offset": offset})
+        assert audiobooks is not None
+        return models.Paginator[models.SimpleAudiobook].model_validate_json(audiobooks)
 
     async def save_audiobooks_for_user(
         self,
@@ -800,7 +516,7 @@ class REST:
         audiobook_ids : list[str]
             The IDs of the audiobooks. Maximum: 50.
         """
-        await self.put("me/audiobooks", {"ids": ",".join(audiobook_ids)})
+        await self.put("me/audiobooks", params={"ids": ",".join(audiobook_ids)})
 
     async def remove_users_saved_audiobooks(
         self,
@@ -813,11 +529,9 @@ class REST:
         audiobook_ids : list[str]
             The IDs of the audiobooks. Maximum: 50.
         """
-        await self.delete("me/audiobooks", {"ids": ",".join(audiobook_ids)})
+        await self.delete("me/audiobooks", params={"ids": ",".join(audiobook_ids)})
 
-    async def check_users_saved_audiobooks(
-        self, audiobook_ids: list[str]
-    ) -> list[bool]:
+    async def check_users_saved_audiobooks(self, audiobook_ids: list[str]) -> list[bool]:
         """Check if one or more audiobooks is already saved in the current user's library.
 
         Parameters
@@ -830,13 +544,44 @@ class REST:
         list[bool]
             A list of booleans dictating whether or not the corresponding audiobooks are already saved.
         """
-        return await self.get(
-            "me/audiobooks/contains", {"ids": ",".join(audiobook_ids)}
-        )
+        audiobooks = await self.get("me/audiobooks/contains", params={"ids": ",".join(audiobook_ids)})
+        assert audiobooks is not None
+        return json_.loads(audiobooks)
 
-    async def get_chapter(
-        self, chapter_id: str, *, market: str | None = None
-    ) -> models.Chapter:
+    async def get_several_browse_categories(
+        self,
+        *,
+        country: str | types_.MissingType = types_.MISSING,
+        locale: str | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.Category]:
+        categories = await self.get(
+            "browse/categories",
+            params={"country": country, "locale": locale, "limit": limit, "offset": offset},
+        )
+        assert categories is not None
+        return internals._CategoryPaginator.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            categories).paginator
+
+    async def get_single_browse_category(
+        self,
+        category_id: str,
+        *,
+        country: str | types_.MissingType = types_.MISSING,
+        locale: str | types_.MissingType = types_.MISSING,
+    ) -> models.Category:
+        category = await self.get(
+                f"browse/categories/{category_id}",
+                params={
+                    "country": country,
+                    "locale": locale,
+                },
+            )
+        assert category is not None
+        return models.Category.model_validate_json(category)
+
+    async def get_chapter(self, chapter_id: str, *, market: str | types_.MissingType = types_.MISSING) -> models.Chapter:
         """Get Spotify catalog information for a single chapter.
 
         .. note ::
@@ -856,12 +601,12 @@ class REST:
         models.Chapter
             The requested chapter.
         """
-        return models.Chapter.from_payload(
-            await self.get(f"chapters/{chapter_id}", {"market": market})
-        )
+        chapter = await self.get(f"chapters/{chapter_id}", params={"market": market})
+        assert chapter is not None
+        return models.Chapter.model_validate_json(chapter)
 
     async def get_several_chapters(
-        self, chapter_ids: list[str], *, market: str | None = None
+        self, chapter_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
     ) -> list[models.Chapter]:
         """Get Spotify catalog information for several chapters.
 
@@ -882,18 +627,766 @@ class REST:
         list[models.Chapter]
             The requested chapters.
         """
-        return [
-            models.Chapter.from_payload(cha)
-            for cha in (
-                await self.get(
-                    "chapters", {"ids": ",".join(chapter_ids), "market": market}
-                )
-            )["chapters"]
-        ]
+        chapters = await self.get("chapters", params={"ids": ",".join(chapter_ids), "market": market})
+        assert chapters is not None
+        return internals._Chapters.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            chapters
+        ).chapters
 
-    async def get_track(
-        self, track_id: str, *, market: str | None = None
-    ) -> models.Track:
+    # NOTE: market is required on this endpoint when not using a user token I think
+    async def get_episode(self, episode_id: str, *, market: str | types_.MissingType = types_.MISSING) -> models.Episode:
+        """Get Spotify catalog information for a single episode.
+
+        Parameters
+        ----------
+        episode_id : str
+            The ID of the episode.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Episode
+            The requested episode.
+        """
+        episode = await self.get(f"episodes/{episode_id}", params={"market": market})
+        assert episode is not None
+        return models.Episode.model_validate_json(episode)
+
+    # NOTE: market is required on this endpoint when not using a user token I think
+    # otherwise a list of null is returned
+    async def get_several_episodes(
+        self, episode_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+    ) -> list[models.Episode]:
+        """Get Spotify catalog information for several episodes.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            The IDs of the episodes. Maximum: 50.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.Episode]
+            The requested episodes.
+        """
+        episodes = await self.get("episodes", params={"ids": ",".join(episode_ids), "market": market})
+        assert episodes is not None
+        return internals._Episodes.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+           episodes
+        ).episodes
+
+    async def get_users_saved_episodes(
+        self,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SavedEpisode]:
+        """Get a list of the episodes saved in the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+
+        Parameters
+        ----------
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.SavedEpisode]
+            A paginator who's items are a list of episodes.
+        """
+        episodes = await self.get("me/episodes", params={"limit": limit, "offset": offset, "market": market})
+        assert episodes is not None
+        return models.Paginator[models.SavedEpisode].model_validate_json(episodes)
+
+    async def save_episodes_for_user(
+        self,
+        episode_ids: list[str],
+    ) -> None:
+        """Save one or more episodes to the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            The IDs of the episodes. Maximum: 50.
+        """
+        await self.put("me/episodes", params={"ids": ",".join(episode_ids)})
+
+    async def remove_users_saved_episodes(self, episode_ids: list[str]) -> None:
+        """Remove one or more episodes from the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            The IDs of the episodes. Maximum: 50.
+        """
+        await self.delete("me/episodes", params={"ids": ",".join(episode_ids)})
+
+    async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
+        """Check if one or more episodes is already saved in the current user's library.
+
+        .. warning::
+
+            This API endpoint is in **beta** and could change without warning.
+
+        Parameters
+        ----------
+        episode_ids : list[str]
+            The IDs of the episodes. Maximum: 50.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans dictating whether or not the corresponding episodes are already saved.
+        """
+        episodes = await self.get("me/episodes/contains", params={"ids": ",".join(episode_ids)})
+        assert episodes is not None
+        return json_.loads(episodes)
+
+    async def get_available_genre_seeds(self) -> list[str]:
+        genres = await self.get("recommendations/available-genre-seeds")
+        assert genres is not None
+
+        return internals._AvailableGenreSeeds.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            genres
+        ).genres
+
+    async def get_available_markets(self) -> list[str]:
+        markets = await self.get("markets")
+        assert markets is not None
+        return internals._AvailableMarkets.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+            markets
+        ).markets
+
+    async def get_playback_state(self, *,  market: str | types_.MissingType = types_.MISSING) -> models.Player | None:
+        player = await self.get("me/player", params={"market": market, "additional_types": "track,episode"})
+        return models.Player.model_validate_json(player) if player is not None else None
+    
+    async def transfer_playback(
+        self,
+        device_id: str,
+        *,
+        play: bool | types_.MissingType = types_.MISSING,
+    ) -> None:
+        await self.put("me/player", json={"device_ids": [device_id], "play": play})
+
+    async def get_available_devices(self) -> list[models.Device]:
+        devices = await self.get("me/player/devices")
+        assert devices is not None
+        return internals._Devices.model_validate_json(devices).devices  # pyright: ignore[reportPrivateUsage]
+    
+    async def get_currently_playing_track(self, *, market: str | types_.MissingType = types_.MISSING) -> models.PlayerTrack | None:
+        player = await self.get("me/player/currently-playing", params={"market": market, "additional_types": "track,episode"})
+        return models.PlayerTrack.model_validate_json(player) if player is not None else None
+    
+    @typing.overload
+    async def start_or_resume_playback(
+        self,
+        *,
+        device_id: str | types_.MissingType = types_.MISSING,
+        context_uri: str | types_.MissingType = types_.MISSING,
+        offset: int | str | types_.MissingType = types_.MISSING,
+        position: datetime.timedelta | types_.MissingType = types_.MISSING,
+    ) -> None:
+        ...
+
+    @typing.overload
+    async def start_or_resume_playback(
+        self,
+        *,
+        device_id: str | types_.MissingType = types_.MISSING,
+        uris: list[str] | types_.MissingType = types_.MISSING,
+        position: datetime.timedelta | types_.MissingType = types_.MISSING,
+    ) -> None:
+        ...
+
+    async def start_or_resume_playback(
+        self, 
+        *,
+        device_id: str | types_.MissingType = types_.MISSING,
+        context_uri: str | types_.MissingType = types_.MISSING,
+        uris: list[str] | types_.MissingType = types_.MISSING,
+        offset: int | str | types_.MissingType = types_.MISSING,
+        position: datetime.timedelta | types_.MissingType = types_.MISSING,
+    ) -> None:
+        final_offset = types_.MISSING
+        if not isinstance(offset, types_.MissingType):
+            if isinstance(offset, int):
+                final_offset = {"position": offset}
+            else:
+                assert isinstance(offset, str)
+                final_offset = {"uri": offset}
+
+        await self.put(
+            "me/player/play",
+            params={
+                "device_id": device_id,
+            },
+            json={
+                "context_uri": context_uri,
+                "uris": uris,
+                "offset": final_offset,
+                "position_ms": position.total_seconds() * 1000 if not isinstance(position, types_.MissingType) else types_.MISSING
+            }
+        )
+
+    async def pause_playback(self, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.put("me/player/pause", params={"device_id": device_id})
+    
+    async def skip_to_next(self, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.post("me/player/next", params={"device_id": device_id})
+
+    async def skip_to_previous(self, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.post("me/player/previous", params={"device_id": device_id})
+
+    async def seek_to_position(self, position: datetime.timedelta, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.put("me/player/seek", params={"position_ms": position.total_seconds() * 1000, "device_id": device_id})
+
+    async def set_repeat_mode(self, state: enums.RepeatState, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.put("me/player/repeat", params={"state": state.value, "device_id": device_id})
+
+    async def set_playback_volume(self, volume_percent: int, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.put("me/player/volume", params={"volume_percent": volume_percent, "device_id": device_id})
+
+    async def set_playback_shuffle(self, state: bool, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+        await self.put("me/player/shuffle", params={"state": state, "device_id": device_id})
+
+    @typing.overload
+    async def get_recently_played_tracks(
+        self,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        after: datetime.datetime | types_.MissingType = types_.MISSING,
+    ) -> models.CursorPaginator[models.PlayHistory]:
+        ...
+
+    @typing.overload
+    async def get_recently_played_tracks(
+        self,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        before: datetime.datetime | types_.MissingType = types_.MISSING,
+    ) -> models.CursorPaginator[models.PlayHistory]:
+        ...
+
+    async def get_recently_played_tracks(
+        self,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        after: datetime.datetime | types_.MissingType = types_.MISSING,
+        before: datetime.datetime | types_.MissingType = types_.MISSING,
+    ) -> models.CursorPaginator[models.PlayHistory]:
+        if not isinstance(after, types_.MissingType) and not isinstance(before, types_.MissingType):
+            raise ValueError("only one of `after` and `before` may be supplied")
+        
+        played = await self.get(
+            "me/player/recently-played",
+            params={
+                "limit": limit,
+                "after": int(after.timestamp() * 1000) if not isinstance(after, types_.MissingType) else types_.MISSING,
+                "before": int(before.timestamp() * 1000) if not isinstance(before, types_.MissingType) else types_.MISSING,
+            }
+        )
+        assert played is not None
+        return models.CursorPaginator[models.PlayHistory].model_validate_json(played)
+
+    async def get_users_queue(self) -> models.Queue:
+        queue = await self.get("me/player/queue")
+        assert queue is not None
+        return models.Queue.model_validate_json(queue)
+
+    async def add_item_to_playback_queue(
+        self,
+        uri: str,
+        *,
+        device_id: str | types_.MissingType = types_.MISSING,
+    ) -> None:
+        await self.post(
+            "me/player/queue",
+            params={
+                "uri": uri,
+                "device_id": device_id
+            }
+        )
+
+    async def get_playlist(
+        self,
+        playlist_id: str,
+        *,
+        market: str | types_.MissingType = types_.MISSING,
+        fields: str | types_.MissingType = types_.MISSING,
+    ) -> models.Playlist:
+        playlist = await self.get(
+            f"playlists/{playlist_id}",
+            params={"market": market, "fields": fields, "additional_types_": "track,episode"},
+        )
+        assert playlist is not None
+        return models.Playlist.model_validate_json(playlist)
+    
+    async def change_playlist_details(
+        self,
+        playlist_id: str,
+        *,
+        name: str | types_.MissingType = types_.MISSING,
+        public: bool | types_.MissingType = types_.MISSING,
+        collaborative: bool | types_.MissingType = types_.MISSING,
+        description: str | types_.MissingType = types_.MISSING,
+    ) -> None:
+        # NOTE
+        # Add to documentation when complete:
+        # "The Spotify Web API is bugged, and does not allow you to clear the description field through the API.
+        # Setting it to `None`, `""` or even `False` will have no effect."
+        await self.put(
+            f"playlists/{playlist_id}",
+            json={
+                "name": name,
+                "public": public,
+                "collaborative": collaborative,
+                "description": description,
+            }
+        )
+
+    async def get_playlist_items(
+        self,
+        playlist_id: str,
+        *,
+        market: str | types_.MissingType = types_.MISSING,
+        fields: str | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.PlaylistItem]:
+        items = await self.get(
+            f"playlists/{playlist_id}/tracks",
+            params={
+                "market": market,
+                "fields": fields,
+                "limit": limit,
+                "offset": offset,
+                "additional_types_": "track,episode",
+            }
+        )
+        assert items is not None
+        return models.Paginator[models.PlaylistItem].model_validate_json(items)
+
+    async def update_playlist_items(
+        self,
+        playlist_id: str,
+        uris: list[str] | types_.MissingType = types_.MISSING,
+        *,
+        range_start: int | types_.MissingType = types_.MISSING,
+        insert_before: int | types_.MissingType = types_.MISSING,
+        range_length: int | types_.MissingType = types_.MISSING,
+        snapshot_id: str | types_.MissingType = types_.MISSING,
+    ) -> str:
+        snapshot_id_ = await self.put(
+            f"playlists/{playlist_id}/tracks",
+            params={
+                "uris": uris,
+            },
+            json={
+                "range_start": range_start,
+                "insert_before": insert_before,
+                "range_length": range_length,
+                "snapshot_id": snapshot_id,
+            }
+        )
+        assert snapshot_id_ is not None
+        return internals._SnapshotID.model_validate_json(snapshot_id_).snapshot_id # pyright: ignore[reportPrivateUsage]
+
+    async def add_items_to_playlist(
+        self,
+        playlist_id: str,
+        *,
+        uris: list[str],
+        position: int | types_.MissingType = types_.MISSING,
+    ) -> str:
+        snapshot_id = await self.post(
+            f"playlists/{playlist_id}/tracks",
+            json={
+                "position": position,
+                "uris": uris,
+            }
+        )
+        assert snapshot_id is not None
+        return internals._SnapshotID.model_validate_json(snapshot_id).snapshot_id # pyright: ignore[reportPrivateUsage]
+    
+    async def remove_playlist_items(
+        self,
+        playlist_id: str,
+        *,
+        uris: list[str],
+        snapshot_id: str | types_.MissingType = types_.MISSING,
+    ) -> str:
+        tracks = [
+            {"uri": uri} for uri in uris
+        ]
+        snapshot_id_ = await self.delete(
+            f"playlists/{playlist_id}/tracks",
+            json={
+                "tracks": tracks,
+                "snapshot_id": snapshot_id
+            }
+        )
+        assert snapshot_id_ is not None
+        return internals._SnapshotID.model_validate_json(snapshot_id_).snapshot_id # pyright: ignore[reportPrivateUsage]
+
+    async def get_current_users_playlists(
+        self,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING
+    ) -> models.Paginator[models.SimplePlaylist]:
+        playlists = await self.get(
+            "me/playlists",
+            params={
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+        assert playlists is not None
+        return models.Paginator[models.SimplePlaylist].model_validate_json(playlists)
+    
+    async def get_users_playlists(
+        self,
+        user_id: str,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING
+    ) -> models.Paginator[models.SimplePlaylist]:
+        playlists = await self.get(
+            f"users/{user_id}/playlists",
+            params={
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+        assert playlists is not None
+        return models.Paginator[models.SimplePlaylist].model_validate_json(playlists)
+    
+    async def create_playlist(
+        self,
+        user_id: str,
+        *,
+        name: str,
+        public: bool | types_.MissingType = types_.MISSING,
+        collaborative: bool | types_.MissingType = types_.MISSING,
+        description: str | types_.MissingType = types_.MISSING,
+    ) -> models.Playlist:
+        playlist = await self.post(
+            f"users/{user_id}/playlists",
+            params={
+                "user_id": user_id,
+            },
+            json={
+                "name": name,
+                "public": public,
+                "collaborative": collaborative,
+                "description": description,
+            }
+        )
+        assert playlist is not None
+        return models.Playlist.model_validate_json(playlist)
+    
+    async def get_featured_playlists(
+        self,
+        *,
+        locale: str | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+    ) -> models.Playlists:
+        playlists = await self.get(
+            "browse/featured-playlists",
+            params={
+                "locale": locale,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+        assert playlists is not None
+        return models.Playlists.model_validate_json(playlists)
+
+    async def get_categorys_playlists(
+        self,
+        category_id: str,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+    ) -> models.Playlists:
+        playlists = await self.get(
+            f"browse/categories/{category_id}/playlists",
+            params={
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+        assert playlists is not None
+        return models.Playlists.model_validate_json(playlists)
+    
+    async def get_playlist_cover_image(
+        self,
+        playlist_id: str,
+    ) -> list[models.Image]:
+        images = await self.get(f"playlists/{playlist_id}/images")
+        assert images is not None
+        img_list: list[dict[str, str | int]] = json_.loads(images)
+        return [models.Image(**img) for img in img_list]  # pyright: ignore[reportArgumentType]
+
+    async def add_custom_playlist_cover_image(
+        self,
+        playlist_id: str,
+        *,
+        image: bytes,
+    ) -> None:
+        image = base64.encodebytes(image).replace(b"\n", b"")
+        await self.put(
+            f"playlists/{playlist_id}/images",
+            data=image,
+        )
+
+    # TODO: create builder class for this
+    async def search_for_item(
+        self,
+        *,
+        types: list[enums.SearchType],
+        query: str | types_.MissingType = types_.MISSING,
+        album: str | types_.MissingType = types_.MISSING,
+        artist: str | types_.MissingType = types_.MISSING,
+        track: str | types_.MissingType = types_.MISSING,
+        start_year: int | types_.MissingType = types_.MISSING,
+        end_year: int | types_.MissingType = types_.MISSING,
+        upc: str | types_.MissingType = types_.MISSING,
+        hipster: bool | types_.MissingType = types_.MISSING,
+        new: bool | types_.MissingType = types_.MISSING,
+        isrc: str | types_.MissingType = types_.MISSING,
+        genres: list[str] | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        include_external: bool | types_.MissingType = types_.MISSING,
+    ) -> models.SearchResult:
+        # NOTE: upon testing, searching for shows and episodes is broken on spotify's side.
+        if len(types) < 1:
+            raise ValueError("`types` may not be empty")
+
+        if isinstance(start_year, types_.MissingType) and not isinstance(end_year, types_.MissingType):
+            raise ValueError("end_year cannot be provided without start_year")
+        
+        if not isinstance(start_year, types_.MissingType) and not isinstance(end_year, types_.MissingType):
+            final_year = f"year:{start_year}-{end_year}"
+        elif not isinstance(start_year, types_.MissingType):
+            final_year = f"year:{start_year}"
+        else:
+            final_year = types_.MISSING
+
+        final_album = f"album:{album}" if not isinstance(album, types_.MissingType) else types_.MISSING
+        final_artist = f"artist:{artist}" if not isinstance(artist, types_.MissingType) else types_.MISSING
+        final_track = f"track:{track}" if not isinstance(track, types_.MissingType) else types_.MISSING
+        final_upc = f"upc:{upc}" if not isinstance(upc, types_.MissingType) else types_.MISSING
+        final_hipster = "tag:hipster" if not isinstance(hipster, types_.MissingType) and hipster is True else types_.MISSING
+        final_new = "tag:new" if not isinstance(new, types_.MissingType) and new is True else types_.MISSING
+        final_isrc = f"isrc:{isrc}" if not isinstance(isrc, types_.MissingType) else types_.MISSING
+        final_genre = f"genre:{' '.join(genres)}" if not isinstance(genres, types_.MissingType) and len(genres) > 0 else types_.MISSING
+
+        final_query = " ".join(
+            [item for item in [
+                query, final_album, final_artist, final_track, final_upc, final_hipster, final_new, final_isrc, final_genre, final_year
+            ] if not isinstance(item, types_.MissingType)]
+        )
+
+        if not final_query.strip():
+            raise ValueError("one of `query`, `album`, `artist`, `track`, `start_year`, `upc`, `hipster`, `new`, `isrc` or `genres` must be provided")
+
+        results = await self.get(
+            "search",
+            params={
+                "q": final_query,
+                "type": ",".join([t.value for t in types]),
+                "market": market,
+                "limit": limit,
+                "offset": offset,
+                "include_external": "audio" if include_external is not isinstance(include_external, types_.MissingType) 
+                and include_external is True else types_.MISSING,
+            }
+        )
+        assert results is not None
+        return models.SearchResult.model_validate_json(results)
+
+    async def get_show(self, show_id: str, *, market: str | types_.MissingType = types_.MISSING) -> models.Show:
+        """Get Spotify catalog information for a single show.
+
+        Parameters
+        ----------
+        show_id : str
+            The ID of the show.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Show
+            The requested show.
+        """
+        show = await self.get(f"shows/{show_id}", params={"market": market})
+        assert show is not None
+        return models.Show.model_validate_json(show)
+
+    async def get_several_shows(
+        self, show_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+    ) -> list[models.SimpleShow]:
+        """Get Spotify catalog information for several shows.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            The IDs of the shows.
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        list[models.SimpleShow]
+            The requested shows.
+        """
+        shows = await self.get("shows", params={"ids": ",".join(show_ids), "market": market})
+        assert shows is not None
+        return internals._Shows.model_validate_json(  # pyright: ignore[reportPrivateUsage]
+           shows
+        ).shows
+    
+    async def get_show_episodes(
+        self,
+        show_id: str,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SimpleEpisode]:
+        """Get Spotify catalog information about an shows's episodes.
+
+        Parameters
+        ----------
+        show_id : str
+            The ID of the show.
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.SimpleEpisode]
+            A paginator who's items are a list of episodes.
+        """
+        episodes = await self.get(
+            f"shows/{show_id}/episodes",
+            params={"limit": limit, "offset": offset, "market": market},
+        )
+        assert episodes is not None
+        return models.Paginator[models.SimpleEpisode].model_validate_json(episodes)
+
+    async def get_users_saved_shows(
+        self,
+        *,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SavedShow]:
+        """Get a list of the shows saved in the current user's library.
+
+        Parameters
+        ----------
+        limit : int, optional
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, optional
+            The index of the first item to return. Default: 0 (the first item).
+        market : str, optional
+            Only get content that is available in that market.
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+
+        Returns
+        -------
+        models.Paginator[models.SavedShow]
+            A paginator who's items are a list of shows.
+        """
+        shows = await self.get(
+            "me/shows",
+            params={"limit": limit, "offset": offset, "market": market},
+        )
+        assert shows is not None
+        return models.Paginator[models.SavedShow].model_validate_json(shows)
+
+    async def save_shows_for_user(
+        self,
+        show_ids: list[str],
+    ) -> None:
+        """Save one or more shows to the current user's library.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            The IDs of the shows. Maximum: 50.
+        """
+        await self.put("me/shows", params={"ids": ",".join(show_ids)})
+
+    async def remove_users_saved_shows(
+        self, show_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+    ) -> None:
+        """Remove one or more shows from the current user's library.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            The IDs of the shows. Maximum: 50.
+        market : str, optional
+            Only modify content that is available in that market (I think, I'm honestly not sure why this field is included here).
+            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+        """
+        await self.delete("me/shows", params={"ids": ",".join(show_ids), "market": market})
+
+    async def check_users_saved_shows(self, show_ids: list[str]) -> list[bool]:
+        """Check if one or more shows is already saved in the current user's library.
+
+        Parameters
+        ----------
+        show_ids : list[str]
+            The IDs of the shows. Maximum: 20.
+
+        Returns
+        -------
+        list[bool]
+            A list of booleans dictating whether or not the corresponding shows are already saved.
+        """
+        shows = await self.get("me/shows/contains", params={"ids": ",".join(show_ids)})
+        assert shows is not None
+        return json_.loads(shows)
+
+    async def get_track(self, track_id: str, *, market: str | types_.MissingType = types_.MISSING) -> models.TrackWithSimpleArtist:
         """Get Spotify catalog information for a single track.
 
         Parameters
@@ -909,13 +1402,13 @@ class REST:
         models.Track
             The requested track.
         """
-        return models.Track.from_payload(
-            await self.get(f"tracks/{track_id}", {"market": market})
-        )
+        track = await self.get(f"tracks/{track_id}", params={"market": market})
+        assert track is not None
+        return models.TrackWithSimpleArtist.model_validate_json(track)
 
     async def get_several_tracks(
-        self, track_ids: list[str], *, market: str | None = None
-    ) -> list[models.Track]:
+        self, track_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+    ) -> list[models.TrackWithSimpleArtist]:
         """Get Spotify catalog information for several tracks.
 
         Parameters
@@ -931,20 +1424,17 @@ class REST:
         list[models.Track]
             The requested tracks.
         """
-        return [
-            models.Track.from_payload(tra)
-            for tra in (
-                await self.get("tracks", {"ids": ",".join(track_ids), "market": market})
-            )["tracks"]
-        ]
+        tracks = await self.get("tracks", params={"ids": ",".join(track_ids), "market": market})
+        assert tracks is not None
+        return internals._Tracks.model_validate_json(tracks).tracks  # pyright: ignore[reportPrivateUsage]
 
     async def get_users_saved_tracks(
         self,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        market: str | None = None,
-    ) -> models.Paginator[models.Track]:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.SavedTrack]:
         """Get a list of the tracks saved in the current user's 'Your Music' library.
 
         Parameters
@@ -959,17 +1449,14 @@ class REST:
 
         Returns
         -------
-        models.Paginator[models.Track]
+        models.Paginator[models.SavedTrack]
             A paginator who's items are a list of tracks.
         """
-        return models.Paginator.from_payload(
-            await self.get(
-                "me/tracks", {"limit": limit, "offset": offset, "market": market}
-            ),
-            models.Track,
-        )
+        tracks = await self.get("me/tracks", params={"limit": limit, "offset": offset, "market": market})
+        assert tracks is not None
+        return models.Paginator[models.SavedTrack].model_validate_json(tracks)
 
-    async def save_tracks_for_user(
+    async def save_tracks_for_current_user(
         self,
         track_ids: list[str],
     ) -> None:
@@ -980,7 +1467,7 @@ class REST:
         track_ids : list[str]
             The IDs of the tracks. Maximum: 50.
         """
-        await self.put("me/tracks", {"ids": track_ids})
+        await self.put("me/tracks", params={"ids": ",".join(track_ids)})
 
     async def remove_users_saved_tracks(self, track_ids: list[str]) -> None:
         """Remove one or more tracks from the current user's 'Your Music' library.
@@ -990,7 +1477,7 @@ class REST:
         track_ids : list[str]
             The IDs of the tracks. Maximum: 50.
         """
-        await self.delete("me/tracks", {"ids": track_ids})
+        await self.delete("me/tracks", params={"ids": ",".join(track_ids)})
 
     async def check_users_saved_tracks(self, track_ids: list[str]) -> list[bool]:
         """Check if one or more tracks is already saved in the current user's 'Your Music' library.
@@ -1005,7 +1492,9 @@ class REST:
         list[bool]
             A list of booleans dictating whether or not the corresponding tracks are already saved.
         """
-        return await self.get("me/tracks/contains", {"ids": track_ids})
+        tracks = await self.get("me/tracks/contains", params={"ids": ",".join(track_ids)})
+        assert tracks is not None
+        return json_.loads(tracks)
 
     async def get_tracks_audio_features(self, track_id: str) -> models.AudioFeatures:
         """Get audio feature information for a single track.
@@ -1020,9 +1509,9 @@ class REST:
         models.AudioFeatures
             The track's audio features.
         """
-        return models.AudioFeatures.from_payload(
-            await self.get(f"audio-features/{track_id}", {})
-        )
+        features = await self.get(f"audio-features/{track_id}")
+        assert features is not None
+        return models.AudioFeatures.model_validate_json(features)
 
     async def get_several_tracks_audio_features(
         self, track_ids: list[str]
@@ -1039,12 +1528,9 @@ class REST:
         list[AudioFeatures]
             The tracks' audio features.
         """
-        return [
-            models.AudioFeatures.from_payload(aud)
-            for aud in (await self.get("audio-features", {"ids": ",".join(track_ids)}))[
-                "audio_features"
-            ]
-        ]
+        features = await self.get("audio-features", params={"ids": ",".join(track_ids)})
+        assert features is not None
+        return internals._AudioFeatures.model_validate_json(features).audio_features  # pyright: ignore[reportPrivateUsage]
 
     async def get_tracks_audio_analysis(self, track_id: str) -> models.AudioAnalysis:
         """Get a low-level audio analysis for a track in the Spotify catalog.
@@ -1061,233 +1547,167 @@ class REST:
         models.AudioAnalysis
             The track's audio analysis.
         """
-
-        return models.AudioAnalysis.from_payload(
-            await self.get(f"audio-analysis/{track_id}", {})
-        )
+        analysis = await self.get(f"audio-analysis/{track_id}")
+        assert analysis is not None
+        return models.AudioAnalysis.model_validate_json(analysis)
 
     async def get_recommendations(
         self,
-        seed_artists: list[str],
-        seed_genres: list[str],
-        seed_tracks: list[str],
+        seed_artists: list[str] | types_.MissingType = types_.MISSING,
+        seed_genres: list[str] | types_.MissingType = types_.MISSING,
+        seed_tracks: list[str] | types_.MissingType = types_.MISSING,
         *,
-        limit: int | None = None,
-        market: str | None = None,
-        max_acousticness: float | None = None,
-        max_danceability: float | None = None,
-        max_duration_ms: int | None = None,
-        max_energy: float | None = None,
-        max_instrumentalness: float | None = None,
-        max_key: int | None = None,
-        max_liveness: float | None = None,
-        max_loudness: float | None = None,
-        max_mode: int | None = None,
-        max_popularity: int | None = None,
-        max_speechiness: float | None = None,
-        max_tempo: float | None = None,
-        max_time_signature: int | None = None,
-        max_valence: float | None = None,
-        min_acousticness: float | None = None,
-        min_danceability: float | None = None,
-        min_duration_ms: int | None = None,
-        min_energy: float | None = None,
-        min_instrumentalness: float | None = None,
-        min_key: int | None = None,
-        min_liveness: float | None = None,
-        min_loudness: float | None = None,
-        min_mode: int | None = None,
-        min_popularity: int | None = None,
-        min_speechiness: float | None = None,
-        min_tempo: float | None = None,
-        min_time_signature: int | None = None,
-        min_valence: float | None = None,
-        target_acousticness: float | None = None,
-        target_danceability: float | None = None,
-        target_duration_ms: int | None = None,
-        target_energy: float | None = None,
-        target_instrumentalness: float | None = None,
-        target_key: int | None = None,
-        target_liveness: float | None = None,
-        target_loudness: float | None = None,
-        target_mode: int | None = None,
-        target_popularity: int | None = None,
-        target_speechiness: float | None = None,
-        target_tempo: float | None = None,
-        target_time_signature: int | None = None,
-        target_valence: float | None = None,
-    ) -> models.Recommendation:
-        """Recommendations are generated based on the available information for a given seed entity
-        and matched against similar artists and tracks. If there is sufficient information about the
-        provided seeds, a list of tracks will be returned together with pool size details.
-
-        For artists and tracks that are very new or obscure there might not be enough data to generate
-        a list of tracks.
-
-        Parameters
-        ----------
-        seed_artists : list[str]
-            A list of artist IDs for seed artists. Up to 5 seed values may be provided in any
-            combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
-        seed_genres : list[str]
-            A list of any genres in the set of available genre seeds. Up to 5 seed values may be
-            provided in any combination of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
-            # TODO: link to available_genre_seeds endpoint.
-        seed_tracks : list[str]
-            A list of track IDs for seed tracks. Up to 5 seed values may be provided in any combination
-            of ``seed_artists``, ``seed_tracks`` and ``seed_genres``.
-        limit : int, optional
-            The target size of the list of recommended tracks. For seeds with unusually small pools or
-            when highly restrictive filtering is applied, it may be impossible to generate the requested
-            number of recommended tracks. Debugging information for such cases is available in the
-            response. Default: 20. Minimum: 1. Maximum: 100.
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        max_acousticness : float, optional
-        max_danceability : float, optional
-        max_duration_ms : int, optional
-        max_energy : float, optional
-        max_instrumentalness : float, optional
-        max_key : int, optional
-        max_liveness : float, optional
-        max_loudness : float, optional
-        max_mode : int, optional
-        max_popularity : int, optional
-        max_speechiness : float, optional
-        max_tempo : float, optional
-        max_time_signature : int, optional
-        max_valence : float, optional
-        min_acousticness : float, optional
-        min_danceability : float, optional
-        min_duration_ms : int, optional
-        min_energy : float, optional
-        min_instrumentalness : float, optional
-        min_key : int, optional
-        min_liveness : float, optional
-        min_loudness : float, optional
-        min_mode : int, optional
-        min_popularity : int, optional
-        min_speechiness : float, optional
-        min_tempo : float, optional
-        min_time_signature : int, optional
-        min_valence : float, optional
-        target_acousticness : float, optional
-        target_danceability : float, optional
-        target_duration_ms : int, optional
-        target_energy : float, optional
-        target_instrumentalness : float, optional
-        target_key : int, optional
-        target_liveness : float, optional
-        target_loudness : float, optional
-        target_mode : int, optional
-        target_popularity : int, optional
-        target_speechiness : float, optional
-        target_tempo : float, optional
-        target_time_signature : int, optional
-        target_valence : float, optional
-
-        Returns
-        -------
-        models.Recommendation
-            The recommended tracks.
-        """
-        # TODO: Use TypedDict (https://peps.python.org/pep-0692/)
-        return models.Recommendation.from_payload(
-            await self.get(
-                "recommendations",
-                {
-                    "seed_artists": ",".join(seed_artists),
-                    "seed_genres": ",".join(seed_genres),
-                    "seed_tracks": ",".join(seed_tracks),
-                    "limit": limit,
-                    "market": market,
-                    "max_acousticness": max_acousticness,
-                    "max_danceability": max_danceability,
-                    "max_duration_ms": max_duration_ms,
-                    "max_energy": max_energy,
-                    "max_instrumentalness": max_instrumentalness,
-                    "max_key": max_key,
-                    "max_liveness": max_liveness,
-                    "max_loudness": max_loudness,
-                    "max_mode": max_mode,
-                    "max_popularity": max_popularity,
-                    "max_speechiness": max_speechiness,
-                    "max_tempo": max_tempo,
-                    "max_time_signature": max_time_signature,
-                    "max_valence": max_valence,
-                    "min_acousticness": min_acousticness,
-                    "min_danceability": min_danceability,
-                    "min_duration_ms": min_duration_ms,
-                    "min_energy": min_energy,
-                    "min_instrumentalness": min_instrumentalness,
-                    "min_key": min_key,
-                    "min_liveness": min_liveness,
-                    "min_loudness": min_loudness,
-                    "min_mode": min_mode,
-                    "min_popularity": min_popularity,
-                    "min_speechiness": min_speechiness,
-                    "min_tempo": min_tempo,
-                    "min_time_signature": min_time_signature,
-                    "min_valence": min_valence,
-                    "target_acousticness": target_acousticness,
-                    "target_danceability": target_danceability,
-                    "target_duration_ms": target_duration_ms,
-                    "target_energy": target_energy,
-                    "target_instrumentalness": target_instrumentalness,
-                    "target_key": target_key,
-                    "target_liveness": target_liveness,
-                    "target_loudness": target_loudness,
-                    "target_mode": target_mode,
-                    "target_popularity": target_popularity,
-                    "target_speechiness": target_speechiness,
-                    "target_tempo": target_tempo,
-                    "target_time_signature": target_time_signature,
-                    "target_valence": target_valence,
-                },
-            )
+        limit: int | types_.MissingType = types_.MISSING,
+        market: str | types_.MissingType = types_.MISSING,
+        
+        min_acousticness: float | types_.MissingType = types_.MISSING,
+        max_acousticness: float | types_.MissingType = types_.MISSING,
+        target_acousticness: float | types_.MissingType = types_.MISSING,
+        
+        min_danceability: float | types_.MissingType = types_.MISSING,
+        max_danceability: float | types_.MissingType = types_.MISSING,
+        target_danceability: float | types_.MissingType = types_.MISSING,
+        
+        # TODO: this should be duration, not duration_ms
+        min_duration_ms: int | types_.MissingType = types_.MISSING,
+        max_duration_ms: int | types_.MissingType = types_.MISSING,
+        target_duration_ms: int | types_.MissingType = types_.MISSING,
+        
+        min_energy: float | types_.MissingType = types_.MISSING,
+        max_energy: float | types_.MissingType = types_.MISSING,
+        target_energy: float | types_.MissingType = types_.MISSING,
+        
+        min_instrumentalness: float | types_.MissingType = types_.MISSING,
+        max_instrumentalness: float | types_.MissingType = types_.MISSING,
+        target_instrumentalness: float | types_.MissingType = types_.MISSING,
+        
+        min_key: int | types_.MissingType = types_.MISSING,
+        max_key: int | types_.MissingType = types_.MISSING,
+        target_key: int | types_.MissingType = types_.MISSING,
+        
+        min_liveness: float | types_.MissingType = types_.MISSING,
+        max_liveness: float | types_.MissingType = types_.MISSING,
+        target_liveness: float | types_.MissingType = types_.MISSING,
+        
+        min_loudness: float | types_.MissingType = types_.MISSING,
+        max_loudness: float | types_.MissingType = types_.MISSING,
+        target_loudness: float | types_.MissingType = types_.MISSING,
+        
+        min_mode: int | types_.MissingType = types_.MISSING,
+        max_mode: int | types_.MissingType = types_.MISSING,
+        target_mode: int | types_.MissingType = types_.MISSING,
+        
+        min_popularity: int | types_.MissingType = types_.MISSING,
+        max_popularity: int | types_.MissingType = types_.MISSING,
+        target_popularity: int | types_.MissingType = types_.MISSING,
+        
+        min_speechiness: float | types_.MissingType = types_.MISSING,
+        max_speechiness: float | types_.MissingType = types_.MISSING,
+        target_speechiness: float | types_.MissingType = types_.MISSING,
+        
+        min_tempo: float | types_.MissingType = types_.MISSING,
+        max_tempo: float | types_.MissingType = types_.MISSING,
+        target_tempo: float | types_.MissingType = types_.MISSING,
+        
+        min_time_signature: int | types_.MissingType = types_.MISSING,
+        max_time_signature: int | types_.MissingType = types_.MISSING,
+        target_time_signature: int | types_.MissingType = types_.MISSING,
+        
+        min_valence: float | types_.MissingType = types_.MISSING,
+        max_valence: float | types_.MissingType = types_.MISSING,
+        target_valence: float | types_.MissingType = types_.MISSING,
+    ) -> models.Recommendations:
+        recommendations = await self.get(
+            "recommendations",
+            params={
+                "seed_artists": seed_artists,
+                "seed_genres": seed_genres,
+                "seed_tracks": seed_tracks,
+                "limit": limit,
+                "market": market,
+                "min_acousticness": min_acousticness,
+                "max_acousticness": max_acousticness,
+                "target_acousticness": target_acousticness,
+                "min_danceability": min_danceability,
+                "max_danceability": max_danceability,
+                "target_danceability": target_danceability,
+                "min_duration_ms": min_duration_ms,
+                "max_duration_ms": max_duration_ms,
+                "target_duration_ms": target_duration_ms,
+                "min_energy": min_energy,
+                "max_energy": max_energy,
+                "target_energy": target_energy,
+                "min_instrumentalness": min_instrumentalness,
+                "max_instrumentalness": max_instrumentalness,
+                "target_instrumentalness": target_instrumentalness,
+                "min_key": min_key,
+                "max_key": max_key,
+                "target_key": target_key,
+                "min_liveness": min_liveness,
+                "max_liveness": max_liveness,
+                "target_liveness": target_liveness,
+                "min_loudness": min_loudness,
+                "max_loudness": max_loudness,
+                "target_loudness": target_loudness,
+                "min_mode": min_mode,
+                "max_mode": max_mode,
+                "target_mode": target_mode,
+                "min_popularity": min_popularity,
+                "max_popularity": max_popularity,
+                "target_popularity": target_popularity,
+                "min_speechiness": min_speechiness,
+                "max_speechiness": max_speechiness,
+                "target_speechiness": target_speechiness,
+                "min_tempo": min_tempo,
+                "max_tempo": max_tempo,
+                "target_tempo": target_tempo,
+                "min_time_signature": min_time_signature,
+                "max_time_signature": max_time_signature,
+                "target_time_signature": target_time_signature,
+                "min_valence": min_valence,
+                "max_valence": max_valence,
+                "target_valence": target_valence,
+            }
         )
+        assert recommendations is not None
+        return models.Recommendations.model_validate_json(recommendations)
 
-    async def get_current_users_profile(self) -> models.User:
-        """Get detailed profile information about the current user.
+    async def get_current_users_profile(self) -> models.OwnUser:
 
-        Returns
-        -------
-        models.User
-            The current user.
-        """
-        return models.User.from_payload(await self.get("me", {}))
+        user = await self.get("me")
+        assert user is not None
+        return models.OwnUser.model_validate_json(user)
 
-    @t.overload
+    @typing.overload
     async def get_users_top_items(
         self,
-        type: t.Literal[enums.TopItemType.ARTISTS] = enums.TopItemType.ARTISTS,
+        type: typing.Literal[enums.TopItemType.ARTISTS] = enums.TopItemType.ARTISTS,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        time_range: enums.TimeRange | None = None,
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        time_range: enums.TimeRange | types_.MissingType = types_.MISSING,
     ) -> models.Paginator[models.Artist]:
         ...
 
-    @t.overload
+    @typing.overload
     async def get_users_top_items(
         self,
-        type: t.Literal[enums.TopItemType.TRACKS] = enums.TopItemType.TRACKS,
+        type: typing.Literal[enums.TopItemType.TRACKS] = enums.TopItemType.TRACKS,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        time_range: enums.TimeRange | None = None,
-    ) -> models.Paginator[models.Track]:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        time_range: enums.TimeRange | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.TrackWithSimpleArtist]:
         ...
 
     async def get_users_top_items(
         self,
         type: enums.TopItemType = enums.TopItemType.ARTISTS,
         *,
-        limit: int | None = None,
-        offset: int | None = None,
-        time_range: enums.TimeRange | None = None,
-    ) -> models.Paginator:
+        limit: int | types_.MissingType = types_.MISSING,
+        offset: int | types_.MissingType = types_.MISSING,
+        time_range: enums.TimeRange | types_.MissingType = types_.MISSING,
+    ) -> models.Paginator[models.Artist] | models.Paginator[models.TrackWithSimpleArtist]:
         """Get the current user's top artists or tracks based on calculated affinity.
 
         Parameters
@@ -1306,17 +1726,20 @@ class REST:
         models.Paginator
             A paginator who's items are a list of tracks or artists.
         """
-        return models.Paginator.from_payload(
-            await self.get(
-                f"me/top/{type.value}",
-                {
-                    "limit": limit,
-                    "offset": offset,
-                    "time_range": time_range.value if time_range else None,
-                },
-            ),
-            models.Artist if type == enums.TopItemType.ARTISTS else models.Track,
+        items = await self.get(
+            f"me/top/{type.value}",
+            params={
+                "limit": limit,
+                "offset": offset,
+                "time_range": time_range.value if not isinstance(time_range, types_.MissingType) else types_.MISSING,
+            },
         )
+        assert items is not None
+        if type is enums.TopItemType.ARTISTS:
+            return models.Paginator[models.Artist].model_validate_json(items)
+        else:
+            assert type is enums.TopItemType.TRACKS
+            return models.Paginator[models.TrackWithSimpleArtist].model_validate_json(items)
 
     async def get_users_profile(
         self,
@@ -1334,12 +1757,14 @@ class REST:
         models.User
             The requested user.
         """
-        return models.User.from_payload(await self.get(f"users/{user_id}", {}))
+        user = await self.get(f"users/{user_id}")
+        assert user is not None
+        return models.User.model_validate_json(user)
 
     async def follow_playlist(
         self,
         playlist_id: str,
-        public: bool | None = None,
+        public: bool | types_.MissingType = types_.MISSING,
     ) -> None:
         """Add the current user as a follower of a playlist.
 
@@ -1350,7 +1775,7 @@ class REST:
         public : bool, optional
             Whether or not the playlist will be included in the user's public playlists. Default: ``True``
         """
-        await self.put(f"playlists/{playlist_id}/followers", {"public": public})
+        await self.put(f"playlists/{playlist_id}/followers", json={"public": public})
 
     async def unfollow_playlist(
         self,
@@ -1363,13 +1788,13 @@ class REST:
         playlist_id : str
             The ID of the playlist.
         """
-        await self.delete(f"playlists/{playlist_id}/followers", {})
+        await self.delete(f"playlists/{playlist_id}/followers")
 
     async def get_followed_artists(
         self,
-        after: str | None = None,
-        limit: int | None = None,
-    ) -> models.Paginator[models.Artist]:
+        after: str | types_.MissingType = types_.MISSING,
+        limit: int | types_.MissingType = types_.MISSING,
+    ) -> models.CursorPaginator[models.Artist]:
         """Get the current user's followed artists.
 
         Parameters
@@ -1384,14 +1809,14 @@ class REST:
         models.Paginator[models.Artist]
             A paginator who's items are a list of artists.
         """
-        return models.Paginator.from_payload(
-            await self.get("me/following", {"after": after, "limit": limit}),
-            models.Artist,
-        )
+        followed = await self.get("me/following", params={"type": "artist", "after": after, "limit": limit})
+        assert followed is not None
+        return internals._ArtistsPaginator.model_validate_json(followed).paginator  # pyright: ignore[reportPrivateUsage]
 
-    async def follow_artists(
+    async def follow_artists_or_users(
         self,
-        artist_ids: list[str],
+        ids: list[str],
+        type: enums.UserType,
     ) -> None:
         """Add the current user as a follower of one or more artists.
 
@@ -1400,24 +1825,12 @@ class REST:
         artist_ids : list[str]
             The IDs of the artists. Maximum: 50.
         """
-        await self.put("me/following", {"ids": ",".join(artist_ids), "type": "artist"})
+        await self.put("me/following", params={"ids": ",".join(ids), "type": type.value})
 
-    async def follow_users(
+    async def unfollow_artists_or_users(
         self,
-        user_ids: list[str],
-    ) -> None:
-        """Add the current user as a follower of one or more Spotify users.
-
-        Parameters
-        ----------
-        user_ids : list[str]
-            The IDs of the users. Maximum: 50.
-        """
-        await self.put("me/following", {"ids": ",".join(user_ids), "type": "user"})
-
-    async def unfollow_artists(
-        self,
-        artist_ids: list[str],
+        ids: list[str],
+        type: enums.UserType
     ) -> None:
         """Remove the current user as a follower of one or more artists.
 
@@ -1426,26 +1839,12 @@ class REST:
         artist_ids : list[str]
             The IDs of the artists. Maximum: 50.
         """
-        await self.delete(
-            "me/following", {"ids": ",".join(artist_ids), "type": "artist"}
-        )
+        await self.delete("me/following", params={"ids": ",".join(ids), "type": type.value})
 
-    async def unfollow_users(
+    async def check_if_user_follows_artists_or_users(
         self,
-        user_ids: list[str],
-    ) -> None:
-        """Remove the current user as a follower of one or more Spotify users.
-
-        Parameters
-        ----------
-        user_ids : list[str]
-            The IDs of the users. Maximum: 50.
-        """
-        await self.delete("me/following", {"ids": ",".join(user_ids), "type": "user"})
-
-    async def check_if_user_follows_artists(
-        self,
-        artist_ids: list[str],
+        ids: list[str],
+        type: enums.UserType,
     ) -> list[bool]:
         """Check to see if the current user is following one or more artists.
 
@@ -1459,35 +1858,16 @@ class REST:
         list[bool]
             A list of booleans dictating whether or not the current user has followed the corresponding artists.
         """
-        return await self.get(
-            "me/following/contains", {"ids": ",".join(artist_ids), "type": "artist"}
+        follows = await self.get(
+            "me/following/contains", params={"ids": ",".join(ids), "type": type.value}
         )
+        assert follows is not None
+        return json_.loads(follows)
 
-    async def check_if_user_follows_users(
-        self,
-        user_ids: list[str],
-    ) -> list[bool]:
-        """Check to see if the current user is following one or more Spotify users.
-
-        Parameters
-        ----------
-        user_ids : list[str]
-            The IDs of the users. Maximum: 50.
-
-        Returns
-        -------
-        list[bool]
-            A list of booleans dictating whether or not the current user has followed the corresponding users.
-        """
-        return await self.get(
-            "me/following/contains", {"ids": ",".join(user_ids), "type": "user"}
-        )
-
-    async def check_if_users_follow_playlist(
+    async def check_if_current_user_follows_playlist(
         self,
         playlist_id: str,
-        user_ids: list[str],
-    ) -> list[bool]:
+    ) -> bool:
         """Check to see if one or more Spotify users are following a specified playlist.
 
         Parameters
@@ -1502,6 +1882,8 @@ class REST:
         list[bool]
             A list of booleans dictating whether or not the corresponding users have followed the playlist.
         """
-        return await self.get(
-            f"playlists/{playlist_id}/followers/contains", {"ids": ",".join(user_ids)}
+        follows = await self.get(
+            f"playlists/{playlist_id}/followers/contains",
         )
+        assert follows is not None
+        return json_.loads(follows)[0]
