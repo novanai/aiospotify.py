@@ -65,8 +65,7 @@ class AuthorizationCodeFlow:
         refresh_token: str,
         *,
         client_id: str,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @typing.overload
     def __init__(
@@ -79,8 +78,7 @@ class AuthorizationCodeFlow:
         *,
         client_id: str,
         client_secret: str,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def __init__(
         self,
@@ -114,8 +112,7 @@ class AuthorizationCodeFlow:
         state: str | None = None,
         scopes: list[enums.Scope] | None = None,
         show_dialog: bool | None = None,
-    ) -> str:
-        ...
+    ) -> str: ...
 
     @typing.overload
     @staticmethod
@@ -127,8 +124,7 @@ class AuthorizationCodeFlow:
         scopes: list[enums.Scope] | None = None,
         show_dialog: bool | None = None,
         code_challenge: str,
-    ) -> str:
-        ...
+    ) -> str: ...
 
     @staticmethod
     def build_url(
@@ -187,8 +183,7 @@ class AuthorizationCodeFlow:
         *,
         client_id: str,
         client_secret: str,
-    ) -> typing.Self:
-        ...
+    ) -> typing.Self: ...
 
     @typing.overload
     @classmethod
@@ -199,8 +194,7 @@ class AuthorizationCodeFlow:
         *,
         client_id: str,
         code_verifier: str,
-    ) -> typing.Self:
-        ...
+    ) -> typing.Self: ...
 
     @classmethod
     async def build_from_access_token(
@@ -281,9 +275,9 @@ class AuthorizationCodeFlow:
         }
 
         if self.client_secret:
-            headers[
-                "Authorization"
-            ] = f"Basic {build_auth_token(self.client_id, self.client_secret)}"
+            headers["Authorization"] = (
+                f"Basic {build_auth_token(self.client_id, self.client_secret)}"
+            )
         else:
             data["client_id"] = self.client_id
 

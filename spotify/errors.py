@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pydantic
 
+
 @pydantic.dataclasses.dataclass
 class APIError(Exception):
     status: int

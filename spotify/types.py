@@ -1,4 +1,4 @@
-# Adapted from https://github.com/hikari-py/hikari/blob/master/hikari/undefined.py
+# Modified from https://github.com/hikari-py/hikari/blob/master/hikari/undefined.py
 
 from __future__ import annotations
 import typing

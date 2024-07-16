@@ -9,15 +9,16 @@ import datetime
 ArtistT = typing.TypeVar("ArtistT", bound="SimpleArtist")
 T = typing.TypeVar("T")
 
+
 class BaseModel(pydantic.BaseModel):
     @pydantic.field_validator("release_date", mode="before", check_fields=False)
     @classmethod
-    def release_date_validator(cls, v: str) -> datetime.datetime | None:
-        if v == "0000":
+    def release_date_validator(cls, v: str | None) -> datetime.datetime | None:
+        if v == "0000" or v is None:
             return None
 
         return utils.datetime_from_timestamp(v)
-    
+
     @pydantic.field_validator("duration", mode="before", check_fields=False)
     @classmethod
     def duration_validator(cls, v: int) -> float:
@@ -28,6 +29,7 @@ class BaseModel(pydantic.BaseModel):
     def album_type_validator(cls, v: str):
         return v.lower()
 
+
 class SavedAlbum(BaseModel):
     """Information about an album saved to a user's "Your Music" library."""
 
@@ -35,6 +37,7 @@ class SavedAlbum(BaseModel):
     """The date and time the album was saved."""
     album: Album
     """The album."""
+
 
 class SimpleAlbum(BaseModel):
     """A simplified album."""
@@ -52,7 +55,7 @@ class SimpleAlbum(BaseModel):
     > An album is considered available in a market when at least 1 of its tracks is available in that market.
     """
     external_urls: ExternalURLs
-    """Known external URLs for this album."""
+    """Known external URLs for the album."""
     href: str
     """A link to the Web API endpoint providing full details of the album."""
     id: str
@@ -60,17 +63,22 @@ class SimpleAlbum(BaseModel):
     images: list[Image]
     """The cover art for the album in various sizes, widest first."""
     name: str
-    """The name of the album. In case of an album takedown, the value may be an empty string."""
+    """The name of the album.
+
+    > [!note]
+    > In case of an album takedown, the value may be an empty string.
+    """
     release_date: datetime.date
     """The date the album was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which :obj:`~.Album.release_date` is known."""
+    """The precision with which `SimpleAlbum.release_date` is known."""
     restrictions: Restrictions | None = None
-    """Present when a content restriction is applied."""
+    """Restrictions applied to the album. Included when a content restriction is applied."""
     uri: str
     """The Spotify URI for the album."""
     artists: list[SimpleArtist]
     """The artists of the album."""
+
 
 class ArtistAlbum(SimpleAlbum):
     """An artist's album."""
@@ -95,11 +103,12 @@ class Album(SimpleAlbum):
     popularity: int
     """The popularity of the album. The value will be between 0 and 100, with 100 being the most popular."""
 
+
 class SimpleArtist(BaseModel):
-    """A simplified artist object."""
+    """A simplified artist."""
 
     external_urls: ExternalURLs
-    """Known external URLs for this artist."""
+    """Known external URLs for the artist."""
     href: str
     """A link to the Web API endpoint providing full details of the artist."""
     id: str
@@ -108,6 +117,7 @@ class SimpleArtist(BaseModel):
     """The name of the artist."""
     uri: str
     """The Spotify URI for the artist."""
+
 
 class Artist(SimpleArtist):
     """An artist."""
@@ -122,17 +132,20 @@ class Artist(SimpleArtist):
     """The popularity of the artist. The value will be between 0 and 100, with 100 being the most
     popular. The artist's popularity is calculated from the popularity of all the artist's tracks."""
 
+
 class SimpleAudiobook(BaseModel):
+    """A simplified audiobook."""
+
     authors: list[Author]
-    """The author(s) for the audiobook."""
+    """The author(s) of the audiobook."""
     available_markets: list[str]
     """A list of the countries in which the audiobook can be played, identified by their
-    `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    [ISO 3166-1 alpha-2 code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)."""
     copyrights: list[Copyright]
     """The copyright statements of the audiobook."""
     description: str
     """A description of the audiobook. HTML tags are stripped away from this field, use the
-    ``models.Audiobook.html_description`` field in case HTML tags are needed."""
+    `Audiobook.html_description` field in case HTML tags are needed."""
     html_description: str
     """A description of the audiobook. This field may contain HTML tags."""
     edition: str | None
@@ -140,7 +153,7 @@ class SimpleAudiobook(BaseModel):
     explicit: bool
     """Whether or not the audiobook has explicit content."""
     external_urls: ExternalURLs
-    """External URLs for this audiobook."""
+    """External URLs for the audiobook."""
     href: str
     """A link to the Web API endpoint providing full details of the audiobook."""
     id: str
@@ -149,7 +162,7 @@ class SimpleAudiobook(BaseModel):
     """The cover art for the audiobook in various sizes, widest first."""
     languages: list[str]
     """A list of the languages used in the audiobook, identified by their
-    `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
+    [ISO 639 code](https://en.wikipedia.org/wiki/ISO_639)."""
     media_type: str
     """The media type of the audiobook."""
     name: str
@@ -161,7 +174,8 @@ class SimpleAudiobook(BaseModel):
     uri: str
     """The Spotify URI for the audiobook."""
     total_chapters: int | None
-    """The number of chapters in this audiobook."""
+    """The number of chapters in the audiobook."""
+
 
 class Audiobook(SimpleAudiobook):
     """An audiobook."""
@@ -169,29 +183,30 @@ class Audiobook(SimpleAudiobook):
     chapters: Paginator[SimpleChapter]
     """The chapters of the audiobook."""
 
+
 class Author(BaseModel):
-    """Author information."""
+    """Audiobook author information."""
 
     name: str
     """The name of the author."""
+
 
 class AudioFeatures(BaseModel):
     """Track audio features."""
 
     acousticness: float
-    """A confidence measure from ``0.0`` to ``1.0`` of whether the track is acoustic.
-    ``1.0`` represents high confidence the track is acoustic."""
+    """A confidence measure from `0.0` to `1.0` of whether the track is acoustic.
+    `1.0` represents high confidence the track is acoustic."""
     analysis_url: str
-    """A URL to access the full audio analysis of this track.
-    An access token is required to access this data."""
+    """A URL to access the full audio analysis of the track."""
     danceability: float
     """Danceability describes how suitable a track is for dancing based on a combination of
     musical elements including tempo, rhythm stability, beat strength, and overall regularity.
-    A value of ``0.0`` is least danceable and ``1.0`` is most danceable."""
+    A value of `0.0` is least danceable and `1.0` is most danceable."""
     duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
     """The duration of the track."""
     energy: float
-    """Energy is a measure from ``0.0`` to ``1.0`` and represents a perceptual measure of intensity and activity.
+    """Energy is a measure from `0.0` to `1.0` and represents a perceptual measure of intensity and activity.
     Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy,
     while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute
     include dynamic range, perceived loudness, timbre, onset rate, and general entropy."""
@@ -200,45 +215,45 @@ class AudioFeatures(BaseModel):
     instrumentalness: float
     """Predicts whether a track contains no vocals. "Ooh" and "aah" sounds are treated as instrumental in
     this context. Rap or spoken word tracks are clearly "vocal". The closer the instrumentalness value is
-    to ``1.0``, the greater likelihood the track contains no vocal content. Values above ``0.5`` are
-    intended to represent instrumental tracks, but confidence is higher as the value approaches ``1.0``."""
+    to `1.0`, the greater likelihood the track contains no vocal content. Values above `0.5` are
+    intended to represent instrumental tracks, but confidence is higher as the value approaches `1.0`."""
     # TODO: maybe use an enum for this value?
     key: int
     """The key the track is in. Integers map to pitches using standard
-    `Pitch Class notation <https://en.wikipedia.org/wiki/Pitch_class>`_. E.g. ``0`` = C, ``1`` = C♯/D♭,
-    ``2`` = D, and so on. If no key was detected, the value is ``-1``."""
+    [Pitch Class notation](https://en.wikipedia.org/wiki/Pitch_class). E.g. `0` = C, `1` = C♯/D♭,
+    `2` = D, and so on. If no key was detected, the value is `-1`."""
     liveness: float
     """Detects the presence of an audience in the recording. Higher liveness values represent an
-    increased probability that the track was performed live. A value above ``0.8`` provides strong
+    increased probability that the track was performed live. A value above `0.8` provides strong
     likelihood that the track is live."""
     loudness: float
     """The overall loudness of a track in decibels (dB). Loudness values are averaged across the
     entire track and are useful for comparing relative loudness of tracks. Loudness is the quality
     of a sound that is the primary psychological correlate of physical strength (amplitude). Values
-    typically range between ``-60`` and ``0`` db."""
+    typically range between `-60` and `0` db."""
     mode: enums.TrackMode
     """Mode indicates the modality (major or minor) of a track, the type of scale from which its
-    melodic content is derived. Major is represented by ``1`` and minor is ``0``."""
+    melodic content is derived."""
     speechiness: float
     """Speechiness detects the presence of spoken words in a track. The more exclusively speech-like
-    the recording (e.g. talk show, audio book, poetry), the closer to ``1.0`` the attribute value. Values
-    above ``0.66`` describe tracks that are probably made entirely of spoken words. Values between
-    ``0.33`` and ``0.66`` describe tracks that may contain both music and speech, either in sections or
-    layered, including such cases as rap music. Values below ``0.33`` most likely represent music and
+    the recording (e.g. talk show, audio book, poetry), the closer to `1.0` the attribute value. Values
+    above `0.66` describe tracks that are probably made entirely of spoken words. Values between
+    `0.33` and `0.66` describe tracks that may contain both music and speech, either in sections or
+    layered, including such cases as rap music. Values below `0.33` most likely represent music and
     other non-speech-like tracks."""
     tempo: float
     """The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo
     is the speed or pace of a given piece and derives directly from the average beat duration."""
     time_signature: int
     """An estimated time signature. The time signature (meter) is a notational convention to specify
-    how many beats are in each bar (or measure). The time signature ranges from ``3`` to ``7`` indicating
+    how many beats are in each bar (or measure). The time signature ranges from `3` to `7` indicating
     time signatures of "3/4", to "7/4"."""
     track_href: str
     """A link to the Web API endpoint providing full details of the track."""
     uri: str
     """The Spotify URI for the track."""
     valence: float
-    """A measure from ``0.0`` to ``1.0`` describing the musical positiveness conveyed by a track. Tracks
+    """A measure from `0.0` to `1.0` describing the musical positiveness conveyed by a track. Tracks
     with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence
     sound more negative (e.g. sad, depressed, angry)."""
 
@@ -247,7 +262,7 @@ class AudioAnalysis(BaseModel):
     """Track audio analysis."""
 
     meta: AudioAnalysisMeta
-    """Metadata."""
+    """Metadata for the analysis."""
     track: AudioAnalysisTrack
     """Track information"""
     bars: list[AudioAnalysisBar]
@@ -264,33 +279,35 @@ class AudioAnalysis(BaseModel):
     """A tatum represents the lowest regular pulse train that a listener intuitively infers from the
     timing of perceived musical events (segments)."""
 
+
 class AudioAnalysisMeta(BaseModel):
     """Audio analysis metadata."""
 
     analyzer_version: str
-    """The version of the Analyzer used to analyze this track."""
+    """The version of the Analyzer used to analyze the track."""
     platform: str
     """The platform used to read the track's audio data."""
     detailed_status: str
-    """A detailed status code for this track. If analysis data is missing, this code may explain why."""
-    status_code: int
-    """The return code of the analyzer process. ``0`` if successful, ``1`` if any errors occurred."""
+    """A detailed status code for the track. If analysis data is missing, this code may explain why."""
+    status_code: enums.StatusCode
+    """The return code of the analyzer process."""
     timestamp: datetime.datetime
-    """The time at which this track was analyzed."""
+    """The time at which the track was analyzed."""
     analysis_time: datetime.timedelta
-    """The amount of time taken to analyze this track."""
+    """The amount of time taken to analyze the track."""
     input_process: str
     """The method used to read the track's audio data."""
+
 
 class AudioAnalysisTrack(BaseModel):
     """Audio analysis track information."""
 
     num_samples: int
-    """The exact number of audio samples analyzed from this track. See also analysis_sample_rate."""
+    """The exact number of audio samples analyzed from the track. See also `analysis_sample_rate`."""
     duration: float
     """Length of the track in seconds."""
     sample_md5: str
-    """This field will always contain the empty string."""
+    """This field will always contain an empty string."""
     offset_seconds: int
     """An offset to the start of the region of the track that was analyzed. (As the entire track is
     analyzed, this should always be 0.)"""
@@ -298,8 +315,8 @@ class AudioAnalysisTrack(BaseModel):
     """The length of the region of the track was analyzed, if a subset of the track was analyzed.
     (As the entire track is analyzed, this should always be 0.)"""
     analysis_sample_rate: int
-    """The sample rate used to decode and analyze this track. May differ from the actual sample rate
-    of this track available on Spotify."""
+    """The sample rate used to decode and analyze the track. May differ from the actual sample rate
+    of the track available on Spotify."""
     analysis_channels: int
     """The number of channels used for analysis. If 1, all channels are summed together to mono before
     analysis."""
@@ -327,7 +344,7 @@ class AudioAnalysisTrack(BaseModel):
     """The confidence, from 0.0 to 1.0, of the reliability of the time_signature."""
     key: int
     """The key the track is in. Integers map to pitches using standard
-    `Pitch Class notation <https://en.wikipedia.org/wiki/Pitch_class>`_. E.g. 0 = C, 1 = C♯/D♭, 2 = D,
+    [Pitch Class notation](https://en.wikipedia.org/wiki/Pitch_class). E.g. 0 = C, 1 = C♯/D♭, 2 = D,
     and so on. If no key was detected, the value is -1."""
     key_confidence: float
     """The confidence, from 0.0 to 1.0, of the reliability of the key."""
@@ -337,26 +354,26 @@ class AudioAnalysisTrack(BaseModel):
     mode_confidence: float
     """The confidence, from 0.0 to 1.0, of the reliability of the mode."""
     codestring: str
-    """An `Echo Nest Musical Fingerprint (ENMFP) <https://academiccommons.columbia.edu/doi/10.7916/D8Q248M4>`_
-    codestring for this track."""
+    """An [Echo Nest Musical Fingerprint (ENMFP)](https://academiccommons.columbia.edu/doi/10.7916/D8Q248M4)
+    codestring for the track."""
     code_version: float
     """A version number for the Echo Nest Musical Fingerprint format used in the codestring field."""
     echoprintstring: str
-    """An `EchoPrint <https://github.com/spotify/echoprint-codegen>`_ codestring for this track."""
+    """An [EchoPrint](https://github.com/spotify/echoprint-codegen) codestring for the track."""
     echoprint_version: float
     """A version number for the EchoPrint format used in the echoprintstring field."""
     synchstring: str
-    """A `Synchstring <https://github.com/echonest/synchdata>`_ for this track."""
+    """A [Synchstring](https://github.com/echonest/synchdata) for the track."""
     synch_version: float
     """A version number for the Synchstring used in the synchstring field."""
     rhythmstring: str
-    """A Rhythmstring for this track. The format of this string is similar to the Synchstring."""
+    """A Rhythmstring for the track. The format of this string is similar to the Synchstring."""
     rhythm_version: float
     """A version number for the Rhythmstring used in the rhythmstring field."""
 
+
 class AudioAnalysisBar(BaseModel):
-    """Audio analysis of a bar.
-    A bar (or measure) is a segment of time defined as a given number of beats."""
+    """Audio analysis of a bar. A bar (or measure) is a segment of time defined as a given number of beats."""
 
     start: float
     """The starting point (in seconds) of the time interval."""
@@ -365,9 +382,9 @@ class AudioAnalysisBar(BaseModel):
     confidence: float
     """The confidence, from 0.0 to 1.0, of the reliability of the interval."""
 
+
 class AudioAnalysisBeat(BaseModel):
-    """Audio analysis of a beat.
-    A beat is the basic time unit of a piece of music; for example, each tick of a metronome.
+    """Audio analysis of a beat. A beat is the basic time unit of a piece of music; for example, each tick of a metronome.
     Beats are typically multiples of tatums."""
 
     start: float
@@ -377,9 +394,9 @@ class AudioAnalysisBeat(BaseModel):
     confidence: float
     """The confidence, from 0.0 to 1.0, of the reliability of the interval."""
 
+
 class AudioAnalysisSection(BaseModel):
-    """Audio analysis of a section.
-    Sections are defined by large variations in rhythm or timbre, e.g. chorus, verse, bridge, guitar
+    """Audio analysis of a section. Sections are defined by large variations in rhythm or timbre, e.g. chorus, verse, bridge, guitar
     solo, etc. Each section contains its own descriptions of tempo, key, mode, time_signature, and
     loudness."""
 
@@ -421,6 +438,7 @@ class AudioAnalysisSection(BaseModel):
     """The confidence, from 0.0 to 1.0, of the reliability of the time_signature. Sections with time
     signature changes may correspond to low values in this field."""
 
+
 class AudioAnalysisSegment(BaseModel):
     """Audio analysis segment."""
 
@@ -439,7 +457,7 @@ class AudioAnalysisSegment(BaseModel):
     loudness_max_time, these components can be used to describe the "attack" of the segment."""
     loudness_max_time: float
     """The segment-relative offset of the segment peak loudness in seconds. Combined with loudness_start
-    and loudness_max, these components can be used to desctibe the "attack" of the segment."""
+    and loudness_max, these components can be used to describe the "attack" of the segment."""
     loudness_end: float
     """The offset loudness of the segment in decibels (dB). This value should be equivalent to the
     loudness_start of the following segment."""
@@ -475,10 +493,9 @@ class AudioAnalysisSegment(BaseModel):
     c1 to c12 represent the 12 coefficients and b1 to b12 the 12 basis functions as displayed below.
     Timbre vectors are best used in comparison with each other."""
 
-class AudioAnalysisTatum(BaseModel):
-    """Audio analysis tatum.
 
-    A tatum represents the lowest regular pulse train that a listener intuitively infers from the timing
+class AudioAnalysisTatum(BaseModel):
+    """Audio analysis tatum. A tatum represents the lowest regular pulse train that a listener intuitively infers from the timing
     of perceived musical events (segments)."""
 
     start: float
@@ -487,6 +504,7 @@ class AudioAnalysisTatum(BaseModel):
     """The duration (in seconds) of the time interval."""
     confidence: float
     """The confidence, from 0.0 to 1.0, of the reliability of the interval."""
+
 
 class Category(BaseModel):
     """A category."""
@@ -500,7 +518,10 @@ class Category(BaseModel):
     name: str
     """The name of the category."""
 
+
 class SimpleChapter(BaseModel):
+    """A simplified chapter."""
+
     audio_preview_url: str | None
     """A URL to a 30 second preview (MP3 format) of the chapter. `None` if not available."""
     available_markets: list[str] | None
@@ -509,7 +530,7 @@ class SimpleChapter(BaseModel):
     chapter_number: int
     """The number of the chapter."""
     description: str
-    """A description of the chapter. HTML tags are stripped away from this field, use the ``html_description`` field in case HTML tags are needed."""
+    """A description of the chapter. HTML tags are stripped away from this field, use the `html_description` field in case HTML tags are needed."""
     html_description: str
     """A description of the chapter. This field may contain HTML tags."""
     duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
@@ -517,7 +538,7 @@ class SimpleChapter(BaseModel):
     explicit: bool
     """Whether or not the chapter has explicit content."""
     external_urls: ExternalURLs
-    """External URLs for this chapter."""
+    """External URLs for the chapter."""
     href: str
     """A link to the Web API endpoint providing full details of the chapter."""
     id: str
@@ -527,13 +548,13 @@ class SimpleChapter(BaseModel):
     is_playable: bool | None = None
     """`True` if the chapter is playable in the given market. Otherwise `False`."""
     languages: list[str]
-    """A list of the languages used in the chapter, identified by their `ISO 639-1 code <https://en.wikipedia.org/wiki/ISO_639>`_."""
+    """A list of the languages used in the chapter, identified by their [ISO 639-1 code](https://en.wikipedia.org/wiki/ISO_639)."""
     name: str
     """The name of the chapter."""
     release_date: datetime.date | None
     """The date the chapter was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which ``release_date`` value is known."""
+    """The precision with which `release_date` value is known."""
     resume_point: ResumePoint | None
     """The user's most recent position in the chapter. Set if the supplied access token is a user token and has the scope 'user-read-playback-position'."""
     uri: str
@@ -541,33 +562,39 @@ class SimpleChapter(BaseModel):
     restrictions: Restrictions | None = None
     """Present when a content restriction is applied."""
 
+
 class Chapter(SimpleChapter):
     """A chapter."""
 
     audiobook: SimpleAudiobook
-    """The audiobook on which this chapter appears."""
+    """The audiobook on which the chapter appears."""
+
 
 class Copyright(BaseModel):
     """Copyright statements."""
 
     text: str
-    """The copyright text for this content."""
+    """The copyright text for the content."""
     type: enums.CopyrightType
     """The type of copyright."""
 
+
 class SavedEpisode(BaseModel):
+    """Information about an episode saved to a user's library."""
+
     added_at: datetime.datetime
     """The date and time the episode was saved."""
     episode: Episode
     """The episode."""
 
+
 class SimpleEpisode(BaseModel):
-    """An episode."""
+    """A simplified episode."""
 
     audio_preview_url: str | None
     """A URL to a 30 second preview (MP3 format) of the episode. `None` if not available."""
     description: str
-    """A description of the episode. HTML tags are stripped away from this field, use the ``html_description`` field in case HTML tags are needed."""
+    """A description of the episode. HTML tags are stripped away from this field, use the `html_description` field in case HTML tags are needed."""
     html_description: str
     """A description of the episode. This field may contain HTML tags."""
     duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
@@ -593,7 +620,7 @@ class SimpleEpisode(BaseModel):
     release_date: datetime.date
     """The date the episode was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which ``release_date`` value is known."""
+    """The precision with which `release_date` value is known."""
     resume_point: ResumePoint | None = None
     """The user's most recent position in the episode. Set if the supplied access token is a user token and has the scope 'user-read-playback-position'."""
     uri: str
@@ -601,26 +628,28 @@ class SimpleEpisode(BaseModel):
     restrictions: Restrictions | None = None
     """Present when a content restriction is applied."""
 
+
 class Episode(SimpleEpisode):
     """An episode."""
 
     show: SimpleShow
-    """The show on which this episode appears."""
+    """The show on which the episode appears."""
+
 
 class ExplicitContent(BaseModel):
     """Explicit content settings."""
 
     filter_enabled: bool
-    """When ``True``, indicates that explicit content should not be played."""
+    """When `True`, indicates that explicit content should not be played."""
     filter_locked: bool
-    """When ``True``, indicates that the explicit content setting is locked and can't be changed by the user."""
+    """When `True`, indicates that the explicit content setting is locked and can't be changed by the user."""
 
 
 class ExternalIDs(BaseModel):
     """External IDs."""
 
     isrc: str | None = None
-    """[International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code/)"""
+    """[International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code)"""
     ean: str | None = None
     """[International Article Number](https://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29)"""
     upc: str | None = None
@@ -633,13 +662,15 @@ class ExternalURLs(BaseModel):
     spotify: str | None
     """The Spotify URL for the object."""
 
+
 class Followers(BaseModel):
     """Information about followers."""
 
     href: str | None
-    """This will always be set to `None`, as the Web API does not support it at the moment."""
+    """This will always be set to `None`, as the Spotify Web API does not support it at the moment."""
     total: int
     """The total number of followers."""
+
 
 class Image(BaseModel):
     """An image."""
@@ -651,21 +682,31 @@ class Image(BaseModel):
     width: int | None
     """The image width in pixels."""
 
+
 class Narrator(BaseModel):
-    """Author information."""
+    """Narrator information."""
 
     name: str
     """The name of the narrator."""
 
 
 class PlayerTrack(BaseModel):
+    """Information about the user's currently playing item."""
+
     context: Context | None
+    """Limited information about the currently playing item."""
     timestamp: datetime.datetime
+    """Time when playback state was last changed (play, pause, skip, scrub, new song, etc.)."""
     progress: datetime.timedelta | None = pydantic.Field(alias="progress_ms")
+    """Progress into the currently playing track or episode."""
     is_playing: bool
+    """True if something is currently playing."""
     item: TrackWithSimpleArtist | Episode | None
+    """The currently playing track or episode."""
     currently_playing_type: enums.PlayingType
+    """The type of the currently playing item."""
     actions: Actions
+    """Actions available to control playback."""
 
     @pydantic.field_validator("currently_playing_type", mode="before", check_fields=False)
     @classmethod
@@ -676,62 +717,111 @@ class PlayerTrack(BaseModel):
     @classmethod
     def progress_validator(cls, v: int) -> float:
         return v / 1000
-    
-class Player(PlayerTrack):
-    device: Device
-    repeat_state: enums.RepeatState
-    shuffle_state: bool
 
-    
+
+class Player(PlayerTrack):
+    """Information about the user's current playback state."""
+
+    device: Device
+    """The device that is currently active."""
+    repeat_state: enums.RepeatState
+    """Whether or not a repeat is applied to playback."""
+    shuffle_state: bool
+    """Whether or not shuffle is on."""
+
+
 class Device(BaseModel):
+    """Information about a playback device."""
+
     id: str | None
+    """The device ID. This ID is unique and persistent to some extent. However, this is not guaranteed and any cached device_id should periodically be cleared out and refetched as necessary."""
     is_active: bool
+    """If this device is the currently active device."""
     is_private_session: bool
+    """If this device is currently in a private session."""
     is_restricted: bool
+    """Whether controlling this device is restricted. At present if this is "True" then no Web API commands will be accepted by this device."""
     name: str
-    # NOTE: I did not add an enum for this field as there no official list of values
-    # [This](https://github.com/spotify/web-api/issues/687#issuecomment-358783650) list from 2018 exists,
-    # but I don't trust that it is up to date.
+    """A human-readable name for the device. Some devices have a name that the user can configure (e.g. "Loudest speaker") and some devices have a generic name associated with the manufacturer or device model."""
     type: str
+    """Device type, such as "computer", "smartphone" or "speaker".
+    
+    NOTE: I did not add an enum for this field as there no official list of values
+    [This](https://github.com/spotify/web-api/issues/687#issuecomment-358783650) list from 2018 exists,
+    but I don't trust that it is up to date."""
     volume_percent: int | None
+    """The current volume in percent."""
     supports_volume: bool
+    """If this device can be used to set the volume."""
+
 
 class Context(BaseModel):
+    """Limited information about the currently playing item."""
+
     type: enums.ContextType
+    """The item type."""
     href: str
+    """A link to the Web API endpoint providing full details of the item."""
     external_urls: ExternalURLs
+    """External URLs for this context."""
     uri: str
+    """The Spotify URI for the context."""
+
 
 class Actions(BaseModel):
+    """Actions available to control playback."""
+
     interrupting_playback: bool | None = None
+    """Interrupting playback."""
     pausing: bool | None = None
+    """Pausing"""
     resuming: bool | None = None
+    """Resuming."""
     seeking: bool | None = None
+    """Seeking playback position."""
     skipping_next: bool | None = None
+    """Skipping to the next context."""
     skipping_prev: bool | None = None
+    """Skipping to the previous context. """
     toggling_repeat_context: bool | None = None
+    """Toggling repeat context flag."""
     toggling_shuffle: bool | None = None
+    """Toggling shuffle flag."""
     toggling_repeat_track: bool | None = None
+    """Toggling repeat track flag. """
     transferring_playback: bool | None = None
+    """Transferring playback between devices."""
+
 
 class PlayHistory(BaseModel):
+    """Information about a track on a user's play history."""
+
     track: TrackWithSimpleArtist
+    """The track the user listened to."""
     played_at: datetime.datetime
+    """The date and time the track was played."""
     context: Context
+    """The context the track was played from."""
+
 
 class Queue(BaseModel):
+    """Information about a user's queue."""
+
     currently_playing: Track | Episode | None
+    """The currently playing track or episode."""
     queue: list[Track | Episode]
+    """The tracks or episodes in the queue."""
+
 
 class SimplePlaylist(BaseModel):
     """A simplified playlist."""
 
     collaborative: bool
-    """``True`` if the owner allows other users to modify the playlist."""
+    """`True` if the owner allows other users to modify the playlist."""
     description: str | None
-    """The playlist description. Only returned for modified, verified playlists, otherwise ``None``."""
+    """The playlist description. Only returned for modified, verified playlists, otherwise `None`."""
     external_urls: ExternalURLs
-    """Known external URLs for this playlist."""
+    """Known external URLs for the playlist."""
     href: str
     """A link to the Web API endpoint providing full details of the playlist."""
     id: str
@@ -755,6 +845,7 @@ class SimplePlaylist(BaseModel):
     uri: str
     """The Spotify URI for the playlist."""
 
+
 class Playlist(SimplePlaylist):
     """A playlist."""
 
@@ -762,7 +853,7 @@ class Playlist(SimplePlaylist):
     """Information about the followers of the playlist."""
     tracks: Paginator[PlaylistItem]  # pyright: ignore[reportIncompatibleVariableOverride]
     """The tracks of the playlist."""
-    
+
 
 class PlaylistTracks(BaseModel):
     """Link to the Web API endpoint where full details of the playlist's tracks can be retrieved,
@@ -775,21 +866,34 @@ class PlaylistTracks(BaseModel):
     total: int
     """Number of tracks in the playlist."""
 
+
 class PlaylistItem(BaseModel):
+    """A playlist item."""
+
     added_at: datetime.datetime | None
+    """The date and time the track or episode was added. Note: some very old playlists may return null in this field."""
     added_by: SimpleUser | None
+    """The Spotify user who added the track or episode. Note: some very old playlists may return null in this field."""
     is_local: bool
-    track: PlaylistTrack | Episode | None
+    """Whether this track or episode is a local file or not."""
+    track: TrackWithSimpleArtist | Episode | None
+    """Information about the track or episode."""
+
 
 class Playlists(BaseModel):
+    """A set of playlists."""
+
     message: str
+    """The localized message of a playlist. e.g. \"Popular Playlists\""""
     playlists: Paginator[SimplePlaylist]
+    """The playlists in the set."""
+
 
 class BasePaginator(
     BaseModel,
     typing.Generic[T],
 ):
-    """A paginator with helpful methods to paginate through large amounts of content."""
+    """A paginator with helpful methods to iterate through large amounts of content."""
 
     href: str
     """A link to the Web API endpoint returning the full result of the request."""
@@ -802,19 +906,30 @@ class BasePaginator(
     items: list[T]
     """The requested content."""
 
+    # TODO: add abstract methods here which are covered in the subclasses
+
+
 class Paginator(BasePaginator[T]):
+    """A basic paginator."""
+
     offset: int
     """The offset of the items returned."""
     previous: str | None
     """URL to the previous page of items."""
 
+
 class CursorPaginator(BasePaginator[T]):
+    """A paginator using cursors to paginate the content."""
+
     cursors: Cursors
+    """The cursors used to find the next set of items."""
     total: int | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+    """The total number of items available to return."""
+
 
 class Cursors(BaseModel):
-    """The cursors used to find the next set of items."""
-    
+    """Cursors used to find the next set of items in a paginator."""
+
     after: str | None = None
     """The cursor to use as key to find the next page of items."""
     before: str | None = None
@@ -830,10 +945,8 @@ class Restrictions(BaseModel):
     @pydantic.field_validator("reason", mode="before", check_fields=False)
     @classmethod
     def reason_validator(cls, v: str) -> str:
-        return (
-            v if v in ("market", "product", "explicit", "payment_required")
-            else "unknown"
-        )
+        return v if v in ("market", "product", "explicit", "payment_required") else "unknown"
+
 
 class ResumePoint(BaseModel):
     """Resume point information."""
@@ -843,11 +956,15 @@ class ResumePoint(BaseModel):
     resume_position: datetime.timedelta = pydantic.Field(alias="resume_position_ms")
     """The user's most recent position in the episode."""
 
+
 class SavedShow(BaseModel):
+    """Information about a show saved to a user's library."""
+
     added_at: datetime.datetime
     """The date and time the show was saved."""
     show: SimpleShow
     """The show."""
+
 
 class SimpleShow(BaseModel):
     """A simplified show."""
@@ -857,13 +974,13 @@ class SimpleShow(BaseModel):
     copyrights: list[Copyright]
     """The copyright statements of the show."""
     description: str
-    """A description of the show. HTML tags are stripped away from this field, use the ``models.Show.html_description`` field in case HTML tags are needed."""
+    """A description of the show. HTML tags are stripped away from this field, use the `models.Show.html_description` field in case HTML tags are needed."""
     html_description: str
     """A description of the show. This field may contain HTML tags."""
     explicit: bool
     """Whether or not the show has explicit content."""
     external_urls: ExternalURLs
-    """External URLs for this show."""
+    """External URLs for the show."""
     href: str
     """A link to the Web API endpoint providing full details of the show."""
     id: str
@@ -871,7 +988,7 @@ class SimpleShow(BaseModel):
     images: list[Image]
     """The cover art for the show in various sizes, widest first."""
     is_externally_hosted: bool | None
-    """True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be ``None`` in some cases."""
+    """True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be `None` in some cases."""
     languages: list[str]
     """A list of the languages used in the show, identified by their `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
     media_type: str
@@ -885,34 +1002,50 @@ class SimpleShow(BaseModel):
     total_episodes: int
     """The total number of episodes in the show."""
 
+
 class Show(SimpleShow):
     """A show."""
 
     episodes: Paginator[SimpleEpisode]
     """The episodes of the show."""
 
+
 class SearchResult(BaseModel):
+    """A search result."""
+
     tracks: Paginator[TrackWithSimpleArtist] | None = None
+    """Returned tracks."""
     artists: Paginator[Artist] | None = None
+    """Returned artists."""
     albums: Paginator[SimpleAlbum] | None = None
+    """Returned albums."""
     playlists: Paginator[SimplePlaylist] | None = None
+    """Returned playlists."""
     # NOTE: the unique `SimpleShow | None` below is to ignore/bypass an error caused by the spotify API
     # where it returns `null` objects instead of `Show` objects
     shows: Paginator[SimpleShow | None] | None = None
+    """Returned shows."""
     episodes: Paginator[SimpleEpisode] | None = None
+    """Returned episodes."""
     audiobooks: Paginator[SimpleAudiobook] | None = None
+    """Returned audiobooks."""
+
 
 class SavedTrack(BaseModel):
-    """Information about an track saved to a user's "Your Music" library."""
+    """Information about a track saved to a user's "Your Music" library."""
 
     added_at: datetime.datetime
     """The date and time the track was saved."""
     track: TrackWithSimpleArtist
     """The track."""
 
+
 class LinkedFromTrack(BaseModel):
+    """Information about the originally requested track when
+    [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking) is applied."""
+
     external_urls: ExternalURLs
-    """Known external URLs for this track."""
+    """Known external URLs for the track."""
     href: str
     """A link to the Web API endpoint providing full details of the track."""
     id: str
@@ -920,14 +1053,17 @@ class LinkedFromTrack(BaseModel):
     uri: str
     """The Spotify URI for the track."""
 
+
 class TrackBase(LinkedFromTrack, typing.Generic[ArtistT]):
+    """Base class for a track."""
+
     artists: list[ArtistT]
     """The artists who performed the track."""
     available_markets: list[str] | None = None
     """A list of the countries in which the track can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-    Returns ``None`` if a market was specified in the request."""
+    Returns `None` if a market was specified in the request."""
     disc_number: int
-    """The disc number (usually ``1`` unless the album consists of more than one disc)."""
+    """The disc number (usually `1` unless the album consists of more than one disc)."""
     duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
     """The track length."""
     explicit: bool
@@ -943,17 +1079,19 @@ class TrackBase(LinkedFromTrack, typing.Generic[ArtistT]):
     name: str
     """The name of the track."""
     preview_url: str | None
-    """A link to a 30 second preview (MP3 format) of the track. Can be ``None``"""
+    """A link to a 30 second preview (MP3 format) of the track. Can be `None`"""
     track_number: int
     """The number of the track. If an album has several discs, the track number is the number on the specified disc."""
     is_local: bool
     """Whether or not the track is from a local file."""
 
+
 class SimpleTrack(TrackBase[SimpleArtist]):
     """A simplified track."""
 
+
 class FullTrack(TrackBase[ArtistT], typing.Generic[ArtistT]):
-    """A track."""
+    """A track class with all available track attributes."""
 
     album: SimpleAlbum
     """The album on which the track appears."""
@@ -961,45 +1099,44 @@ class FullTrack(TrackBase[ArtistT], typing.Generic[ArtistT]):
     """Known external IDs for the track."""
     popularity: int
     """The popularity of the track. The value will be between 0 and 100, with 100 being the most popular."""
+
 
 class Track(FullTrack[Artist]):
-    ...
-
-class TrackWithSimpleArtist(FullTrack[SimpleArtist]):
-    ...
-
-class PlaylistTrack(TrackBase[SimpleArtist]):
     """A track."""
 
-    album: SimpleAlbum
-    """The album on which the track appears."""
-    external_ids: ExternalIDs
-    """Known external IDs for the track."""
-    popularity: int
-    """The popularity of the track. The value will be between 0 and 100, with 100 being the most popular."""
+
+class TrackWithSimpleArtist(FullTrack[SimpleArtist]):
+    """A track where the `artist` field is a `SimpleArtist` object."""
+
 
 class SimpleUser(BaseModel):
+    """A simplified user."""
+
     external_urls: ExternalURLs
-    """Known external URLs for this user."""
+    """Known external URLs for the user."""
     followers: Followers | None = None
     """Information about the followers of the user."""
     href: str
-    """A link to the Web API endpoint for this user."""
+    """A link to the Web API endpoint for the user."""
     id: str
     """The Spotify user ID for the user."""
     uri: str
     """The Spotify URI for the user."""
 
+
 class User(SimpleUser):
+    """A user."""
+
     display_name: str | None
-    """The name displayed on the user's profile. ``None`` if not available."""
+    """The name displayed on the user's profile. `None` if not available."""
+
 
 class OwnUser(User):
-    """A user."""
+    """A user with additional information."""
 
     country: str | None = None
     """The country of the user, as set in the user's account profile. An `ISO 3166-1 alpha-2 country code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-    This field is only available when the current user has granted access to the ``user-read-private`` scope."""
+    This field is only available when the current user has granted access to the `user-read-private` scope."""
     email: str | None = None
     """The user's email address, as entered by the user when creating their account.
     This field is only available when the current user has granted access to the `user-read-email` scope.
@@ -1012,13 +1149,13 @@ class OwnUser(User):
     images: list[Image]
     """The user's profile image."""
     product: enums.SubscriptionLevel | None = None
-    """The user's Spotify subscription level: "premium", "free", etc. (The subscription level "open" can be considered the same as "free".)
-    This field is only available when the current user has granted access to the user-read-private scope."""
+    """The user's Spotify subscription level. This field is only available when the current user has granted access to the user-read-private scope."""
 
     @pydantic.field_validator("product", mode="before", check_fields=False)
     @classmethod
     def product_validator(cls, v: str) -> str:
         return "free" if v == "open" else v
+
 
 class Recommendations(BaseModel):
     """Recommendations."""
@@ -1028,6 +1165,7 @@ class Recommendations(BaseModel):
     tracks: list[Track]
     """A list of simplified track objects."""
 
+
 class RecommendationsSeed(BaseModel):
     """A recommendation seed."""
 
@@ -1036,14 +1174,15 @@ class RecommendationsSeed(BaseModel):
     after_relinking_size: int
     """The number of tracks available after relinking for regional availability."""
     href: str | None
-    """A link to the full track or artist data for this seed.
+    """A link to the full track or artist data for the seed.
     For tracks this will be a link to a Track Object.
     For artists a link to an Artist Object.
-    For genre seeds, this value will be ``None``."""
+    For genre seeds, this value will be `None`."""
     id: str
-    """The id used to select this seed. This will be the same as the string used in the ``seed_artists``, ``seed_tracks`` or
-    ``seed_genres`` parameter."""
+    """The id used to select the seed. This will be the same as the string used in the `seed_artists`, `seed_tracks` or
+    `seed_genres` parameter."""
     initial_pool_size: int
-    """The number of recommended tracks available for this seed."""
+    """The number of recommended tracks available for the seed."""
+    # TODO: add enum
     type: str
-    """The entity type of this seed. One of ``artist``, ``track`` or ``genre``."""
+    """The entity type of the seed. One of `artist`, `track` or `genre`."""

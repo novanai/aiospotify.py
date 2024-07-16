@@ -7,7 +7,9 @@ from spotify import types
 
 def process_dict(dict_: dict[str, t.Any]) -> dict[str, t.Any]:
     return {
-        k: v.value if isinstance(v, enum.Enum) else v for k, v in dict_.items() if v is not types.MISSING
+        k: v.value if isinstance(v, enum.Enum) else v
+        for k, v in dict_.items()
+        if v is not types.MISSING
     }
 
 
