@@ -1,0 +1,64 @@
+site_name: aiospotify
+
+theme:
+  name: "material"
+
+nav:
+  - Home: index.md
+  - API Reference:
+    - OAuth: reference/oauth.md
+    - Albums: reference/albums.md
+    - Artists: reference/artists.md
+    - Audiobooks: reference/audiobooks.md
+    - Categories: reference/categories.md
+    - Chapters: reference/chapters.md
+    - Episodes: reference/episodes.md
+    - Genres: reference/genres.md
+    - Markets: reference/markets.md
+    - Player: reference/player.md
+    - Playlists: reference/playlists.md
+    - Search: reference/search.md
+    - Shows: reference/shows.md
+    - Tracks: reference/tracks.md
+    - Audio Features & Analysis: reference/audio.md
+    - Recommendations: reference/recommendations.md
+    - Users: reference/users.md
+    - Shared Models: reference/shared.md
+    - Enums: reference/enums.md
+    - Missing Type: reference/types.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: "#"
+
+plugins:
+- search
+- mkdocstrings:
+    handlers:
+      python:
+        import:
+          - https://docs.python.org/3.12/objects.inv
+        options:
+          docstring_section_style: list
+          docstring_style: numpy
+          group_by_category: false
+          heading_level: 2
+          inherited_members: true
+          members_order: source
+          separate_signature: true
+          show_bases: false
+          show_labels: false
+          show_root_full_path: false
+          show_root_heading: true
+          show_signature_annotations: true
+          show_source: false
+          show_symbol_type_heading: true
+          show_symbol_type_toc: true
+          signature_crossrefs: true
+
+watch:
+  - docs
+  - spotify

@@ -8,19 +8,21 @@ import base64
 import datetime
 
 import spotify
-from spotify import enums, errors, models, utils, internals, types as types_
+from spotify import enums, errors, models, utils, internals
+
+from spotify.types import MissingOr, MISSING
 
 if typing.TYPE_CHECKING:
     from spotify import oauth
 
 
-class REST:
+class API:
     """Implementation to make API calls with.
 
     Parameters
     ----------
     access_flow : oauth.AuthorizationCodeFlow | oauth.ClientCredentialsFlow
-        Access manager to use for requests.
+        Access flow to use for api requests.
     """
 
     def __init__(
@@ -119,9 +121,7 @@ class REST:
     ) -> bytes | None:
         return await self.request("DELETE", url, params=params, json=json, data=data)
 
-    async def get_album(
-        self, album_id: str, *, market: str | types_.MissingType = types_.MISSING
-    ) -> models.Album:
+    async def get_album(self, album_id: str, *, market: MissingOr[str] = MISSING) -> models.Album:
         """Get Spotify catalog information for a single album.
 
         Parameters
@@ -129,8 +129,8 @@ class REST:
         album_id : str
             The ID of the album.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -142,7 +142,7 @@ class REST:
         return models.Album.model_validate_json(album)
 
     async def get_several_albums(
-        self, album_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+        self, album_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> list[models.Album]:
         """Get Spotify catalog information for several albums.
 
@@ -151,8 +151,8 @@ class REST:
         album_ids : list[str]
             The IDs of the albums.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -169,9 +169,9 @@ class REST:
         self,
         album_id: str,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.SimpleTrack]:
         """Get Spotify catalog information about an album's tracks.
 
@@ -179,13 +179,13 @@ class REST:
         ----------
         album_id : str
             The ID of the album.
-        limit : int, optional
+        limit : int, default 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -202,21 +202,21 @@ class REST:
     async def get_users_saved_albums(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.SavedAlbum]:
         """Get a list of the albums saved in the current user's 'Your Music' library.
 
         Parameters
         ----------
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -229,7 +229,7 @@ class REST:
         assert albums is not None
         return models.Paginator[models.SavedAlbum].model_validate_json(albums)
 
-    async def save_albums_for_user(
+    async def save_albums_for_current_user(
         self,
         album_ids: list[str],
     ) -> None:
@@ -240,7 +240,7 @@ class REST:
         album_ids : list[str]
             The IDs of the albums. Maximum: 50.
         """
-        await self.put("me/albums", params={"ids": ",".join(album_ids)})
+        await self.put("me/albums", json={"ids": album_ids})
 
     async def remove_users_saved_albums(self, album_ids: list[str]) -> None:
         """Remove one or more albums from the current user's 'Your Music' library.
@@ -250,7 +250,7 @@ class REST:
         album_ids : list[str]
             The IDs of the albums. Maximum: 50.
         """
-        await self.delete("me/albums", params={"ids": ",".join(album_ids)})
+        await self.delete("me/albums", json={"ids": album_ids})
 
     async def check_users_saved_albums(self, album_ids: list[str]) -> list[bool]:
         """Check if one or more albums is already saved in the current user's 'Your Music' library.
@@ -263,7 +263,7 @@ class REST:
         Returns
         -------
         list[bool]
-            A list of booleans dictating whether or not the corresponding albums are already saved.
+            A list of booleans dictating whether or not the corresponding albums are saved.
         """
         albums = await self.get("me/albums/contains", params={"ids": ",".join(album_ids)})
         assert albums is not None
@@ -272,21 +272,17 @@ class REST:
     async def get_new_releases(
         self,
         *,
-        country: str | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SimpleAlbum]:
         """Get a list of new album releases featured in Spotify (shown, for example, on a Spotify
-        player's "Browse" tab).
+        player's 'Browse' tab).
 
         Parameters
         ----------
-        country : str, optional
-            Only get content relevant to that country.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
 
         Returns
@@ -296,7 +292,7 @@ class REST:
         """
         albums = await self.get(
             "browse/new-releases",
-            params={"country": country, "limit": limit, "offset": offset},
+            params={"limit": limit, "offset": offset},
         )
         assert albums is not None
         return internals._SimpleAlbumPaginator.model_validate_json(  # pyright: ignore[reportPrivateUsage]
@@ -343,10 +339,10 @@ class REST:
         self,
         artist_id: str,
         *,
-        include_groups: list[enums.AlbumGroup] | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        include_groups: MissingOr[list[enums.AlbumGroup]] = MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.ArtistAlbum]:
         """Get Spotify catalog information about an artist's albums.
 
@@ -354,15 +350,15 @@ class REST:
         ----------
         artist_id : str
             The ID of the artist.
-        include_groups : list[enums.AlbumGroup], optional
+        include_groups : list[enums.AlbumGroup], default: all album types
             Used to filter the type of items returned. If not specified, all album types_ will be returned.
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -373,8 +369,8 @@ class REST:
             f"artists/{artist_id}/albums",
             params={
                 "include_groups": ",".join(g.value for g in include_groups)
-                if not isinstance(include_groups, types_.MissingType)
-                else types_.MISSING,
+                if include_groups is not MISSING
+                else MISSING,
                 "limit": limit,
                 "offset": offset,
                 "market": market,
@@ -383,9 +379,8 @@ class REST:
         assert albums is not None
         return models.Paginator[models.ArtistAlbum].model_validate_json(albums)
 
-    # NOTE: market is required for this endpoint
     async def get_artists_top_tracks(
-        self, artist_id: str, *, market: str
+        self, artist_id: str, *, market: MissingOr[str] = MISSING
     ) -> list[models.TrackWithSimpleArtist]:
         """Get Spotify catalog information about an artist's top tracks.
 
@@ -393,13 +388,13 @@ class REST:
         ----------
         artist_id : str
             The ID of the artist.
-        market : str
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
-        list[models.Track]
+        list[models.TrackWithSimpleArtist]
             The requested tracks.
         """
         tracks = await self.get(f"artists/{artist_id}/top-tracks", params={"market": market})
@@ -429,21 +424,17 @@ class REST:
         ).artists
 
     async def get_audiobook(
-        self, audiobook_id: str, *, market: str | types_.MissingType = types_.MISSING
+        self, audiobook_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.Audiobook:
         """Get Spotify catalog information for a single audiobook.
-
-        .. note ::
-
-            Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
 
         Parameters
         ----------
         audiobook_id : str
             The ID of the audiobook.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -458,21 +449,17 @@ class REST:
         self,
         audiobook_ids: list[str],
         *,
-        market: str | types_.MissingType = types_.MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> list[models.Audiobook]:
         """Get Spotify catalog information for several audiobooks.
-
-        .. note ::
-
-            Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
 
         Parameters
         ----------
         audiobook_ids : list[str]
             The IDs of the audiobooks. Maximum: 50.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -491,27 +478,23 @@ class REST:
         self,
         audiobook_id: str,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.SimpleChapter]:
         """Get Spotify catalog information about an audiobooks's chapters.
-
-        .. note ::
-
-            Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
 
         Parameters
         ----------
         audiobook_id : str
             The ID of the audiobook.
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -528,16 +511,16 @@ class REST:
     async def get_users_saved_audiobooks(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SimpleAudiobook]:
-        """Get a list of the audiobooks saved in the current user's library.
+        """Get a list of the audiobooks saved in the current user's 'Your Music' library.
 
         Parameters
         ----------
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
 
         Returns
@@ -553,7 +536,7 @@ class REST:
         self,
         audiobook_ids: list[str],
     ) -> None:
-        """Save one or more audiobooks to the current user's library.
+        """Save one or more audiobooks to the current user's 'Your Music' library.
 
         Parameters
         ----------
@@ -566,7 +549,7 @@ class REST:
         self,
         audiobook_ids: list[str],
     ) -> None:
-        """Remove one or more audiobooks from the current user's library.
+        """Remove one or more audiobooks from the current user's 'Your Music' library.
 
         Parameters
         ----------
@@ -576,7 +559,7 @@ class REST:
         await self.delete("me/audiobooks", params={"ids": ",".join(audiobook_ids)})
 
     async def check_users_saved_audiobooks(self, audiobook_ids: list[str]) -> list[bool]:
-        """Check if one or more audiobooks is already saved in the current user's library.
+        """Check if one or more audiobooks are already saved in the current user's 'Your Music' library.
 
         Parameters
         ----------
@@ -594,18 +577,66 @@ class REST:
         assert audiobooks is not None
         return json_.loads(audiobooks)
 
+    @typing.overload
     async def get_several_browse_categories(
         self,
         *,
-        country: str | types_.MissingType = types_.MISSING,
-        locale: str | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        country: str,
+        locale: str,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+    ) -> models.Paginator[models.Category]: ...
+
+    @typing.overload
+    async def get_several_browse_categories(
+        self,
+        *,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+    ) -> models.Paginator[models.Category]: ...
+
+    async def get_several_browse_categories(
+        self,
+        *,
+        country: MissingOr[str] = MISSING,
+        locale: MissingOr[str] = MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.Category]:
+        """Get a list of categories used to tag items in Spotify (on, for example, the Spotify player's 'Browse' tab).
+
+        Parameters
+        ----------
+        country : str, optional
+            Desired country to get content for.
+        locale : str, optional
+            Desired language to get content in. Default: American English
+
+            !!! note
+                Both or neither of the `country` and `locale` parameters must be provided.
+
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+
+        Returns
+        -------
+        models.Paginator[models.Category]
+            A paginator who's items are a list of categories.
+        """
+        if (country is MISSING and locale is not MISSING) or (
+            country is not MISSING and locale is MISSING
+        ):
+            raise ValueError("both or neither of `country` and `locale` must be provided")
+        elif country is not MISSING and locale is not MISSING:
+            locale = f"{locale}-{country}"
+        else:
+            locale = MISSING
+
         categories = await self.get(
             "browse/categories",
             params={
-                "country": country,
                 "locale": locale,
                 "limit": limit,
                 "offset": offset,
@@ -616,17 +647,58 @@ class REST:
             categories
         ).paginator
 
+    @typing.overload
+    async def get_single_browse_category(
+        self,
+        category_id: str,
+    ) -> models.Category: ...
+
+    @typing.overload
     async def get_single_browse_category(
         self,
         category_id: str,
         *,
-        country: str | types_.MissingType = types_.MISSING,
-        locale: str | types_.MissingType = types_.MISSING,
+        country: str,
+        locale: str,
+    ) -> models.Category: ...
+
+    async def get_single_browse_category(
+        self,
+        category_id: str,
+        *,
+        country: MissingOr[str] = MISSING,
+        locale: MissingOr[str] = MISSING,
     ) -> models.Category:
+        """Get a single category used to tag items in Spotify (on, for example, the Spotify player's 'Browse' tab).
+
+        Parameters
+        ----------
+        category_id : str
+            The ID of the category.
+        country : str, optional
+            Desired country to get content for.
+        locale : str, optional
+            Desired language to get content in. Default: American English
+
+            !!! note
+                Both or neither of the `country` and `locale` parameters must be provided.
+        Returns
+        -------
+        models.Category
+            The requested category.
+        """
+        if (country is MISSING and locale is not MISSING) or (
+            country is not MISSING and locale is MISSING
+        ):
+            raise ValueError("both or neither of `country` and `locale` must be provided")
+        elif country is not MISSING and locale is not MISSING:
+            locale = f"{locale}-{country}"
+        else:
+            locale = MISSING
+
         category = await self.get(
             f"browse/categories/{category_id}",
             params={
-                "country": country,
                 "locale": locale,
             },
         )
@@ -634,21 +706,17 @@ class REST:
         return models.Category.model_validate_json(category)
 
     async def get_chapter(
-        self, chapter_id: str, *, market: str | types_.MissingType = types_.MISSING
+        self, chapter_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.Chapter:
         """Get Spotify catalog information for a single chapter.
-
-        .. note ::
-
-            Chapters are only available for the US, UK, Ireland, New Zealand and Australia markets.
 
         Parameters
         ----------
         chapter_id : str
             The ID of the chapter.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -663,21 +731,17 @@ class REST:
         self,
         chapter_ids: list[str],
         *,
-        market: str | types_.MissingType = types_.MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> list[models.Chapter]:
         """Get Spotify catalog information for several chapters.
-
-        .. note ::
-
-            Chapters are only available for the US, UK, Ireland, New Zealand and Australia markets.
 
         Parameters
         ----------
         chapter_ids : list[str]
             The IDs of the chapters. Maximum: 50.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -692,19 +756,21 @@ class REST:
             chapters
         ).chapters
 
-    # NOTE: market is required on this endpoint when not using a user token I think
     async def get_episode(
-        self, episode_id: str, *, market: str | types_.MissingType = types_.MISSING
+        self, episode_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.Episode:
         """Get Spotify catalog information for a single episode.
+
+        !!! warning
+            When not using a user token for auth, `market` is required. Otherwise you will receive a 404.
 
         Parameters
         ----------
         episode_id : str
             The ID of the episode.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -715,23 +781,26 @@ class REST:
         assert episode is not None
         return models.Episode.model_validate_json(episode)
 
-    # NOTE: market is required on this endpoint when not using a user token I think
-    # otherwise a list of null is returned
+    # NOTE: market is required on this endpoint when not using a user token
+    # otherwise a list of null objects is returned - RAISING VALIDATION ERROR
     async def get_several_episodes(
         self,
         episode_ids: list[str],
         *,
-        market: str | types_.MissingType = types_.MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> list[models.Episode]:
         """Get Spotify catalog information for several episodes.
+
+        !!! warning
+            When not using a user token for auth, `market` is required. Otherwise you will receive an error.
 
         Parameters
         ----------
         episode_ids : list[str]
             The IDs of the episodes. Maximum: 50.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -749,25 +818,24 @@ class REST:
     async def get_users_saved_episodes(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.SavedEpisode]:
-        """Get a list of the episodes saved in the current user's library.
+        """Get a list of the episodes saved in the current user's 'Your Music' library.
 
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
+        !!! warning
+            This API endpoint is in **beta** and could break without warning.
 
         Parameters
         ----------
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -780,15 +848,14 @@ class REST:
         assert episodes is not None
         return models.Paginator[models.SavedEpisode].model_validate_json(episodes)
 
-    async def save_episodes_for_user(
+    async def save_episodes_for_current_user(
         self,
         episode_ids: list[str],
     ) -> None:
-        """Save one or more episodes to the current user's library.
+        """Save one or more episodes to the current user's 'Your Music' library.
 
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
+        !!! warning
+            This API endpoint is in **beta** and could break without warning.
 
         Parameters
         ----------
@@ -798,11 +865,10 @@ class REST:
         await self.put("me/episodes", params={"ids": ",".join(episode_ids)})
 
     async def remove_users_saved_episodes(self, episode_ids: list[str]) -> None:
-        """Remove one or more episodes from the current user's library.
+        """Remove one or more episodes from the current user's 'Your Music' library.
 
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
+        !!! warning
+            This API endpoint is in **beta** and could break without warning.
 
         Parameters
         ----------
@@ -812,11 +878,10 @@ class REST:
         await self.delete("me/episodes", params={"ids": ",".join(episode_ids)})
 
     async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
-        """Check if one or more episodes is already saved in the current user's library.
+        """Check if one or more episodes are already saved in the current user's 'Your Music' library.
 
-        .. warning::
-
-            This API endpoint is in **beta** and could change without warning.
+        !!! warning
+            This API endpoint is in **beta** and could break without warning.
 
         Parameters
         ----------
@@ -833,6 +898,13 @@ class REST:
         return json_.loads(episodes)
 
     async def get_available_genre_seeds(self) -> list[str]:
+        """Retrieve a list of available genres seed parameter values for recommendations.
+
+        Returns
+        -------
+        list[str]
+            The available genre seeds.
+        """
         genres = await self.get("recommendations/available-genre-seeds")
         assert genres is not None
 
@@ -841,6 +913,13 @@ class REST:
         ).genres
 
     async def get_available_markets(self) -> list[str]:
+        """Get the list of markets where Spotify is available.
+
+        Returns
+        -------
+        list[str]
+            The markets where Spotify is available.
+        """
         markets = await self.get("markets")
         assert markets is not None
         return internals._AvailableMarkets.model_validate_json(  # pyright: ignore[reportPrivateUsage]
@@ -848,8 +927,23 @@ class REST:
         ).markets
 
     async def get_playback_state(
-        self, *, market: str | types_.MissingType = types_.MISSING
+        self, *, market: MissingOr[str] = MISSING
     ) -> models.Player | None:
+        """Get information about the user's current playback state, including track or episode, progress, and active device.
+
+        Parameters
+        ----------
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+
+        Returns
+        -------
+        models.Player
+            Player information.
+        None
+            If there is no playback state.
+        """
         player = await self.get(
             "me/player", params={"market": market, "additional_types": "track,episode"}
         )
@@ -859,18 +953,53 @@ class REST:
         self,
         device_id: str,
         *,
-        play: bool | types_.MissingType = types_.MISSING,
+        play: MissingOr[bool] = MISSING,
     ) -> None:
+        """Transfer playback to a new device and optionally begin playback.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        device_id : str
+            The ID of the device on which playback should be started/transferred.
+        play : bool, default False
+            Whether or not to ensure playback happens on the specified device.
+        """
         await self.put("me/player", json={"device_ids": [device_id], "play": play})
 
     async def get_available_devices(self) -> list[models.Device]:
+        """Get information about a user's available Spotify Connect devices.
+        Some device models are not supported and will not be listed in the response.
+
+        Returns
+        -------
+        list[models.Device]
+            The available devices.
+        """
         devices = await self.get("me/player/devices")
         assert devices is not None
         return internals._Devices.model_validate_json(devices).devices  # pyright: ignore[reportPrivateUsage]
 
     async def get_currently_playing_track(
-        self, *, market: str | types_.MissingType = types_.MISSING
+        self, *, market: MissingOr[str] = MISSING
     ) -> models.PlayerTrack | None:
+        """Get the item currently being played on the user's Spotify account.
+
+        Parameters
+        ----------
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+
+        Returns
+        -------
+        models.PlayerTrack
+            The currently playing item.
+        None
+            If nothing is playing.
+        """
         player = await self.get(
             "me/player/currently-playing",
             params={"market": market, "additional_types": "track,episode"},
@@ -881,32 +1010,59 @@ class REST:
     async def start_or_resume_playback(
         self,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
-        context_uri: str | types_.MissingType = types_.MISSING,
-        offset: int | str | types_.MissingType = types_.MISSING,
-        position: datetime.timedelta | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
+        context_uri: MissingOr[str] = MISSING,
+        offset: MissingOr[int | str] = MISSING,
+        position: MissingOr[datetime.timedelta] = MISSING,
     ) -> None: ...
 
     @typing.overload
     async def start_or_resume_playback(
         self,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
-        uris: list[str] | types_.MissingType = types_.MISSING,
-        position: datetime.timedelta | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
+        track_uris: MissingOr[list[str]] = MISSING,
+        position: MissingOr[datetime.timedelta] = MISSING,
     ) -> None: ...
 
     async def start_or_resume_playback(
         self,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
-        context_uri: str | types_.MissingType = types_.MISSING,
-        uris: list[str] | types_.MissingType = types_.MISSING,
-        offset: int | str | types_.MissingType = types_.MISSING,
-        position: datetime.timedelta | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
+        context_uri: MissingOr[str] = MISSING,
+        track_uris: MissingOr[list[str]] = MISSING,
+        offset: MissingOr[int | str] = MISSING,
+        position: MissingOr[datetime.timedelta] = MISSING,
     ) -> None:
-        final_offset = types_.MISSING
-        if not isinstance(offset, types_.MissingType):
+        """Start a new context or resume current playback on the user's active device.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+
+            !!! note
+                Only one of `context_uri` and `track_uris` may be supplied.
+        context_uri : str, optional
+            URI of an **album**, **artist** or **playlist** to play.
+        track_uris : list[str], optional
+            URIs of **track(s)** to play
+        offset : int | str, optional
+            Indicates where playback should start.
+
+            * [int][] - position where playback should start, 0 being the first item.
+            * [str][] - URI of the item to start at.
+
+            !!! note
+                `offset` can only be used when `context_uri` is an **album** or **playlist**.
+        position : datetime.timedelta, optional
+            The position in the (first) item at which to start playback.
+        """
+        final_offset = MISSING
+        if offset is not MISSING:
             if isinstance(offset, int):
                 final_offset = {"position": offset}
             else:
@@ -920,33 +1076,71 @@ class REST:
             },
             json={
                 "context_uri": context_uri,
-                "uris": uris,
+                "uris": track_uris,
                 "offset": final_offset,
                 "position_ms": position.total_seconds() * 1000
-                if not isinstance(position, types_.MissingType)
-                else types_.MISSING,
+                if position is not MISSING
+                else MISSING,
             },
         )
 
-    async def pause_playback(
-        self, *, device_id: str | types_.MissingType = types_.MISSING
-    ) -> None:
+    async def pause_playback(self, *, device_id: MissingOr[str] = MISSING) -> None:
+        """Pause playback on the user's account.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.put("me/player/pause", params={"device_id": device_id})
 
-    async def skip_to_next(self, *, device_id: str | types_.MissingType = types_.MISSING) -> None:
+    async def skip_to_next(self, *, device_id: MissingOr[str] = MISSING) -> None:
+        """Skip to the next item in the user's queue.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.post("me/player/next", params={"device_id": device_id})
 
-    async def skip_to_previous(
-        self, *, device_id: str | types_.MissingType = types_.MISSING
-    ) -> None:
+    async def skip_to_previous(self, *, device_id: MissingOr[str] = MISSING) -> None:
+        """Skip to the previous item in the user's queue.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.post("me/player/previous", params={"device_id": device_id})
 
     async def seek_to_position(
         self,
         position: datetime.timedelta,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
     ) -> None:
+        """Seeks to the given position in the user's currently playing track.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        position : datetime.timedelta
+            The position to seek to. If this value is longer than the length of the current item, the next item will be played.
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.put(
             "me/player/seek",
             params={
@@ -959,70 +1153,124 @@ class REST:
         self,
         state: enums.RepeatState,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
     ) -> None:
+        """Set the repeat mode for the user's playback.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        state : enums.RepeatState
+            The repeat state (off/track/context).
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.put("me/player/repeat", params={"state": state.value, "device_id": device_id})
 
     async def set_playback_volume(
         self,
         volume_percent: int,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
     ) -> None:
+        """Set the volume for the user's current playback device.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        volume_percent : int
+            The volume to set. Must be a value from 0 to 100 inclusive.
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.put(
             "me/player/volume",
             params={"volume_percent": volume_percent, "device_id": device_id},
         )
 
     async def set_playback_shuffle(
-        self, state: bool, *, device_id: str | types_.MissingType = types_.MISSING
+        self, state: bool, *, device_id: MissingOr[str] = MISSING
     ) -> None:
+        """Set shuffle mode for user's playback.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        state : bool
+            Whether or not to shuffle the user's playback.
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.put("me/player/shuffle", params={"state": state, "device_id": device_id})
 
     @typing.overload
     async def get_recently_played_tracks(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        after: datetime.datetime | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        after: MissingOr[datetime.datetime] = MISSING,
     ) -> models.CursorPaginator[models.PlayHistory]: ...
 
     @typing.overload
     async def get_recently_played_tracks(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        before: datetime.datetime | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        before: MissingOr[datetime.datetime] = MISSING,
     ) -> models.CursorPaginator[models.PlayHistory]: ...
 
     async def get_recently_played_tracks(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        after: datetime.datetime | types_.MissingType = types_.MISSING,
-        before: datetime.datetime | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        after: MissingOr[datetime.datetime] = MISSING,
+        before: MissingOr[datetime.datetime] = MISSING,
     ) -> models.CursorPaginator[models.PlayHistory]:
-        if not isinstance(after, types_.MissingType) and not isinstance(
-            before, types_.MissingType
-        ):
+        """Get tracks from the current user's recently played tracks.
+
+        !!! note
+            Currently doesn't support podcast episodes.
+
+        Parameters
+        ----------
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+
+            !!! note
+                Only one of `after` and `before` may be provided.
+        after : datetime.datetime
+            Return all items **after** (but not including) this time.
+        before : datetime.datetime
+            Returns all items **before** (but not including) this time.
+        """
+        if after is not MISSING and before is not MISSING:
             raise ValueError("only one of `after` and `before` may be supplied")
 
         played = await self.get(
             "me/player/recently-played",
             params={
                 "limit": limit,
-                "after": int(after.timestamp() * 1000)
-                if not isinstance(after, types_.MissingType)
-                else types_.MISSING,
-                "before": int(before.timestamp() * 1000)
-                if not isinstance(before, types_.MissingType)
-                else types_.MISSING,
+                "after": int(after.timestamp() * 1000) if after is not MISSING else MISSING,
+                "before": int(before.timestamp() * 1000) if before is not MISSING else MISSING,
             },
         )
         assert played is not None
         return models.CursorPaginator[models.PlayHistory].model_validate_json(played)
 
     async def get_users_queue(self) -> models.Queue:
+        """Get the items in the user's queue.
+
+        Returns
+        -------
+        models.Queue
+            The queue.
+        """
         queue = await self.get("me/player/queue")
         assert queue is not None
         return models.Queue.model_validate_json(queue)
@@ -1031,17 +1279,58 @@ class REST:
         self,
         uri: str,
         *,
-        device_id: str | types_.MissingType = types_.MISSING,
+        device_id: MissingOr[str] = MISSING,
     ) -> None:
+        """Add an item to the end of the user's current playback queue.
+
+        !!! info
+            This endpoint only works for users who have Spotify Premium.
+
+        Parameters
+        ----------
+        uri : str
+            URI of a **track** or **episode** to add to the queue.
+        device_id : str, optional
+            The ID of the device this command is targeting. Default: currently active device.
+        """
         await self.post("me/player/queue", params={"uri": uri, "device_id": device_id})
 
+    # TODO: create a helper object for the query field
     async def get_playlist(
         self,
         playlist_id: str,
         *,
-        market: str | types_.MissingType = types_.MISSING,
-        fields: str | types_.MissingType = types_.MISSING,
+        market: MissingOr[str] = MISSING,
+        fields: MissingOr[str] = MISSING,
     ) -> models.Playlist:
+        """Get a playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+        fields : str, optional
+            Filters for the query. If omitted, all fields are returned.
+
+            !!! info
+                * The value for this field should be a comma-separated list of the fields to return.
+                * **Example:** `description,uri`
+                * A dot separator can be used to specify non-reoccurring fields.
+                * Parentheses can be used to specify reoccurring fields within objects.
+                * **Example:** `tracks.items(added_at,added_by.id)`
+                * **Example:** `tracks.items(track(name,href,album(name,href)))`
+                * Fields can be excluded by prefixing them with an exclamation mark (`!`).
+                * **Example:** `tracks.items(track(name,href,album(!name,href)))`
+                * **Example:** `tracks.items(added_by.id,track(name,href,album(name,href)))`
+
+        Returns
+        -------
+        models.Playlist
+            The requested playlist.
+        """
         playlist = await self.get(
             f"playlists/{playlist_id}",
             params={
@@ -1057,15 +1346,33 @@ class REST:
         self,
         playlist_id: str,
         *,
-        name: str | types_.MissingType = types_.MISSING,
-        public: bool | types_.MissingType = types_.MISSING,
-        collaborative: bool | types_.MissingType = types_.MISSING,
-        description: str | types_.MissingType = types_.MISSING,
+        name: MissingOr[str] = MISSING,
+        public: MissingOr[bool] = MISSING,
+        collaborative: MissingOr[bool] = MISSING,
+        description: MissingOr[str] = MISSING,
     ) -> None:
-        # NOTE
-        # Add to documentation when complete:
-        # "The Spotify Web API is bugged, and does not allow you to clear the description field through the API.
-        # Setting it to `None`, `""` or even `False` will have no effect."
+        """Change details for a playlist the current user owns.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        name : str, optional
+            The new name for the playlist.
+        public : bool, optional
+            Whether or not the playlist should be made public.
+        collaborative : bool, optional
+            Whether or not the playlist should be made collaborative.
+
+            !!! note
+                This can only be set to `True` on **non-public** playlists
+        description : str, optional
+            The new description for the playlist.
+
+            !!! note
+                The Spotify Web API is bugged, and does not allow you to clear the description field
+                through the API. Setting it to `None`, `""` or even `False` will have no effect.
+        """
         await self.put(
             f"playlists/{playlist_id}",
             json={
@@ -1076,15 +1383,43 @@ class REST:
             },
         )
 
+    # TODO: create a helper object for the query field
     async def get_playlist_items(
         self,
         playlist_id: str,
         *,
-        market: str | types_.MissingType = types_.MISSING,
-        fields: str | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        market: MissingOr[str] = MISSING,
+        fields: MissingOr[str] = MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.PlaylistItem]:
+        """Get full details of the items of a playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+        fields : str, optional
+            Filters for the query. If omitted, all fields are returned.
+
+            !!! info
+                * The value for this field should be a comma-separated list of the fields to return.
+                * **Example:** `total,limit`
+                * A dot separator can be used to specify non-reoccurring fields.
+                * Parentheses can be used to specify reoccurring fields within objects.
+                * **Example:** `items(added_at,added_by.id)`
+                * **Example:** `items(track(name,href,album(name,href)))`
+                * Fields can be excluded by prefixing them with an exclamation mark (`!`).
+                * **Example:** `items.track.album(!external_urls,images)`
+                * **Example:** `items(added_by.id,track(name,href,album(name,href)))`
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+        """
         items = await self.get(
             f"playlists/{playlist_id}/tracks",
             params={
@@ -1101,13 +1436,44 @@ class REST:
     async def update_playlist_items(
         self,
         playlist_id: str,
-        uris: list[str] | types_.MissingType = types_.MISSING,
         *,
-        range_start: int | types_.MissingType = types_.MISSING,
-        insert_before: int | types_.MissingType = types_.MISSING,
-        range_length: int | types_.MissingType = types_.MISSING,
-        snapshot_id: str | types_.MissingType = types_.MISSING,
+        uris: MissingOr[list[str]] = MISSING,
+        range_start: MissingOr[int] = MISSING,
+        insert_before: MissingOr[int] = MISSING,
+        range_length: MissingOr[int] = MISSING,
+        snapshot_id: MissingOr[str] = MISSING,
     ) -> str:
+        """Reorder or replace playlist items.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        uris : list[str], optional
+            URIs of **tracks** or **episodes** to add to the playlist. Maximum: 100.
+        range_start : int, optional
+            The position of the first item to be reordered.
+        insert_before : int, optional
+            The position where the items should be inserted.
+        range_length : int, default: 1
+            The amount of items to be reordered.
+        snapshot_id : str, optional
+            The playlist's snapshot ID against which you want to make the changes.
+
+        Returns
+        -------
+        str
+            A snapshot ID for the new playlist version.
+
+        Examples
+        --------
+        * To reorder the first item to the end of a playlist with 10 items:
+            Set `range_start` to `0` and `insert_before` to `10`
+        * To reorder the last item to the start in a playlist with 10 items:
+            Set `range_start` to `9` and `insert_before` to `0`
+        * To move the items at index 9-10 to the start of the playlist:
+            Set `range_start` to `9`, `range_length` to `2` and `insert_before` to `0`
+        """
         snapshot_id_ = await self.put(
             f"playlists/{playlist_id}/tracks",
             params={
@@ -1128,8 +1494,24 @@ class REST:
         playlist_id: str,
         *,
         uris: list[str],
-        position: int | types_.MissingType = types_.MISSING,
+        position: MissingOr[int] = MISSING,
     ) -> str:
+        """Add items to a playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        uris : list[str]
+            URIs of **tracks** or **episodes** to add to the playlist. Maximum: 100.
+        position : int, optional
+            The position at which to insert the items (position 0 being the start).
+
+        Returns
+        -------
+        str
+            A snapshot ID for the new playlist version.
+        """
         snapshot_id = await self.post(
             f"playlists/{playlist_id}/tracks",
             json={
@@ -1145,8 +1527,24 @@ class REST:
         playlist_id: str,
         *,
         uris: list[str],
-        snapshot_id: str | types_.MissingType = types_.MISSING,
+        snapshot_id: MissingOr[str] = MISSING,
     ) -> str:
+        """Remove items from a playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        uris : list[str]
+            URIs of **tracks** or **episodes** to remove from the playlist. Maximum: 100.
+        snapshot_id : str, optional
+            The playlist's snapshot ID against which you want to make the changes.
+
+        Returns
+        -------
+        str
+            A snapshot ID for the new playlist version.
+        """
         tracks = [{"uri": uri} for uri in uris]
         snapshot_id_ = await self.delete(
             f"playlists/{playlist_id}/tracks",
@@ -1158,9 +1556,23 @@ class REST:
     async def get_current_users_playlists(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SimplePlaylist]:
+        """Get a list of the playlists owned or followed by the current user.
+
+        Parameters
+        ----------
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+
+        Returns
+        -------
+        models.Paginator[models.SimplePlaylist]
+            The requested playlists.
+        """
         playlists = await self.get(
             "me/playlists",
             params={
@@ -1175,9 +1587,25 @@ class REST:
         self,
         user_id: str,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SimplePlaylist]:
+        """Get a list of the playlists owned or followed by a user.
+
+        Parameters
+        ----------
+        user_id : str
+            The ID of the user.
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+
+        Returns
+        -------
+        models.Paginator[models.SimplePlaylist]
+            The requested playlists.
+        """
         playlists = await self.get(
             f"users/{user_id}/playlists",
             params={
@@ -1193,10 +1621,37 @@ class REST:
         user_id: str,
         *,
         name: str,
-        public: bool | types_.MissingType = types_.MISSING,
-        collaborative: bool | types_.MissingType = types_.MISSING,
-        description: str | types_.MissingType = types_.MISSING,
+        public: MissingOr[bool] = MISSING,
+        collaborative: MissingOr[bool] = MISSING,
+        description: MissingOr[str] = MISSING,
     ) -> models.Playlist:
+        """Create a playlist for a Spotify user.
+
+        Parameters
+        ----------
+        user_id : str
+            The ID of the user.
+        name : str
+            The name for the new playlist.
+        public : bool, default: True
+            Whether or not the playlist will be public.
+
+            !!! note
+                To set `public` to `False`, the user must have granted the `playlist-modify-private` scope.
+        collaborative : bool, default: False
+            Whether or not the playlist will be collaborative.
+
+            !!! note
+                To set `collaborative` to `True`, `public` must be set to `False` and the user must
+                have granted the `playlist-modify-private` and `playlist-modify-public` scopes.
+        description : str, optional
+            The playlist's description.
+
+        Returns
+        -------
+        models.Playlist
+            The newly created playlist.
+        """
         playlist = await self.post(
             f"users/{user_id}/playlists",
             params={
@@ -1215,10 +1670,26 @@ class REST:
     async def get_featured_playlists(
         self,
         *,
-        locale: str | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        locale: MissingOr[str] = MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Playlists:
+        """Get a list of Spotify featured playlists (shown, for example, on a Spotify player's 'Browse' tab).
+
+        Parameters
+        ----------
+        locale : str, optional
+            Desired language to get content in. Default: American English
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+
+        Returns
+        -------
+        models.Playlists
+            The requested playlists.
+        """
         playlists = await self.get(
             "browse/featured-playlists",
             params={
@@ -1234,9 +1705,25 @@ class REST:
         self,
         category_id: str,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Playlists:
+        """Get a list of Spotify playlists tagged with a particular category.
+
+        Parameters
+        ----------
+        category_id : str
+            The ID of the category.
+        limit : int, default: 20
+            The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+
+        Returns
+        -------
+        models.Playlists
+            The requested playlists.
+        """
         playlists = await self.get(
             f"browse/categories/{category_id}/playlists",
             params={
@@ -1251,6 +1738,18 @@ class REST:
         self,
         playlist_id: str,
     ) -> list[models.Image]:
+        """Get the current image associated with a specific playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+
+        Returns
+        -------
+        list[models.Image]
+            The playlist cover image, potentially in different sizes.
+        """
         images = await self.get(f"playlists/{playlist_id}/images")
         assert images is not None
         img_list: list[dict[str, str | int]] = json_.loads(images)
@@ -1262,6 +1761,15 @@ class REST:
         *,
         image: bytes,
     ) -> None:
+        """Replace the image used to represent a specific playlist.
+
+        Parameters
+        ----------
+        playlist_id : str
+            The ID of the playlist.
+        image : bytes
+            JPEG image data, in bytes. Maximum size is 256 KB.
+        """
         image = base64.encodebytes(image).replace(b"\n", b"")
         await self.put(
             f"playlists/{playlist_id}/images",
@@ -1273,65 +1781,99 @@ class REST:
         self,
         *,
         types: list[enums.SearchType],
-        query: str | types_.MissingType = types_.MISSING,
-        album: str | types_.MissingType = types_.MISSING,
-        artist: str | types_.MissingType = types_.MISSING,
-        track: str | types_.MissingType = types_.MISSING,
-        start_year: int | types_.MissingType = types_.MISSING,
-        end_year: int | types_.MissingType = types_.MISSING,
-        upc: str | types_.MissingType = types_.MISSING,
-        hipster: bool | types_.MissingType = types_.MISSING,
-        new: bool | types_.MissingType = types_.MISSING,
-        isrc: str | types_.MissingType = types_.MISSING,
-        genres: list[str] | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        include_external: bool | types_.MissingType = types_.MISSING,
+        query: MissingOr[str] = MISSING,
+        album: MissingOr[str] = MISSING,
+        artist: MissingOr[str] = MISSING,
+        track: MissingOr[str] = MISSING,
+        start_year: MissingOr[int] = MISSING,
+        end_year: MissingOr[int] = MISSING,
+        upc: MissingOr[str] = MISSING,
+        hipster: MissingOr[bool] = MISSING,
+        new: MissingOr[bool] = MISSING,
+        isrc: MissingOr[str] = MISSING,
+        genres: MissingOr[list[str]] = MISSING,
+        market: MissingOr[str] = MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        include_external: MissingOr[bool] = MISSING,
     ) -> models.SearchResult:
+        """Get Spotify catalog information about albums, artists, playlists, tracks, shows, episodes or audiobooks
+        that match the search query.
+
+        Parameters
+        ----------
+        types : list[enums.SearchType]
+            Type of items to search for.
+        query : str, optional
+            The search query.
+        album : str, optional
+            The album. Can be used while searching **albums** and **tracks**.
+        artist : str, optional
+            The artist. Can be used while searching **albums**, **artists** and **tracks**.
+        track : str, optional
+            The track. Can be used while searching **tracks**.
+
+            !!! note
+                start_year and end_year can be used to create a range of years to search across.
+        start_year : int, optional
+            The year, or start year if also using `end_year`. Can be used while searching **albums**, **artists**
+            and **tracks**.
+        end_year : int, optional
+            The end year. If supplied, `start_year` must also be supplied. Can be used while searching **albums**,
+            **artists** and **tracks**.
+        upc : str, optional
+            The [Universal Product Code](http://en.wikipedia.org/wiki/Universal_Product_Code) for the item.
+            Can be used while searching **albums**.
+        hipster : bool, optional
+            If `True`, get **albums** with the lowest 10% popularity.
+            Can be used while searching **albums**.
+        new : bool, optional
+            If `True`, get **albums** released within the past 2 weeks.
+            Can be used while searching **albums**.
+        isrc : str, optional
+            The [International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code)
+            for the item. Can be used while searching **tracks**.
+        genres : list[str], optional
+            The genre(s). Can be used while searching **artists** and **tracks**.
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+        limit : int, default: 20
+            The maximum number of results to return in each item type. Default: 20. Minimum: 0. Maximum: 50.
+        offset : int, default: 0
+            The index of the first item to return. Default: 0 (the first item).
+        include_external : bool, optional
+            If set to `True` it signals that the client can play externally hosted audio content, and marks the content as
+            playable in the response.
+
+        Returns
+        -------
+        models.SearchResult
+            The search result.
+        """
         # NOTE: upon testing, searching for shows and episodes is broken on spotify's side.
         if len(types) < 1:
             raise ValueError("`types` may not be empty")
 
-        if isinstance(start_year, types_.MissingType) and not isinstance(
-            end_year, types_.MissingType
-        ):
+        if start_year is MISSING and end_year is not MISSING:
             raise ValueError("end_year cannot be provided without start_year")
 
-        if not isinstance(start_year, types_.MissingType) and not isinstance(
-            end_year, types_.MissingType
-        ):
+        if start_year is not MISSING and end_year is not MISSING:
             final_year = f"year:{start_year}-{end_year}"
-        elif not isinstance(start_year, types_.MissingType):
+        elif start_year is not MISSING:
             final_year = f"year:{start_year}"
         else:
-            final_year = types_.MISSING
+            final_year = MISSING
 
-        final_album = (
-            f"album:{album}" if not isinstance(album, types_.MissingType) else types_.MISSING
-        )
-        final_artist = (
-            f"artist:{artist}" if not isinstance(artist, types_.MissingType) else types_.MISSING
-        )
-        final_track = (
-            f"track:{track}" if not isinstance(track, types_.MissingType) else types_.MISSING
-        )
-        final_upc = f"upc:{upc}" if not isinstance(upc, types_.MissingType) else types_.MISSING
-        final_hipster = (
-            "tag:hipster"
-            if not isinstance(hipster, types_.MissingType) and hipster is True
-            else types_.MISSING
-        )
-        final_new = (
-            "tag:new"
-            if not isinstance(new, types_.MissingType) and new is True
-            else types_.MISSING
-        )
-        final_isrc = f"isrc:{isrc}" if not isinstance(isrc, types_.MissingType) else types_.MISSING
+        final_album = f"album:{album}" if album is not MISSING else MISSING
+        final_artist = f"artist:{artist}" if artist is not MISSING else MISSING
+        final_track = f"track:{track}" if track is not MISSING else MISSING
+        final_upc = f"upc:{upc}" if upc is not MISSING else MISSING
+        final_hipster = "tag:hipster" if hipster is not MISSING and hipster is True else MISSING
+        final_new = "tag:new" if new is not MISSING and new is True else MISSING
+        final_isrc = f"isrc:{isrc}" if isrc is not MISSING else MISSING
         final_genre = (
-            f"genre:{' '.join(genres)}"
-            if not isinstance(genres, types_.MissingType) and len(genres) > 0
-            else types_.MISSING
+            f"genre:{' '.join(genres)}" if genres is not MISSING and len(genres) > 0 else MISSING
         )
 
         final_query = " ".join(
@@ -1349,7 +1891,7 @@ class REST:
                     final_genre,
                     final_year,
                 ]
-                if not isinstance(item, types_.MissingType)
+                if item is not MISSING
             ]
         )
 
@@ -1367,17 +1909,14 @@ class REST:
                 "limit": limit,
                 "offset": offset,
                 "include_external": "audio"
-                if include_external is not isinstance(include_external, types_.MissingType)
-                and include_external is True
-                else types_.MISSING,
+                if include_external is not MISSING and include_external is True
+                else MISSING,
             },
         )
         assert results is not None
         return models.SearchResult.model_validate_json(results)
 
-    async def get_show(
-        self, show_id: str, *, market: str | types_.MissingType = types_.MISSING
-    ) -> models.Show:
+    async def get_show(self, show_id: str, *, market: MissingOr[str] = MISSING) -> models.Show:
         """Get Spotify catalog information for a single show.
 
         Parameters
@@ -1385,8 +1924,8 @@ class REST:
         show_id : str
             The ID of the show.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -1398,7 +1937,7 @@ class REST:
         return models.Show.model_validate_json(show)
 
     async def get_several_shows(
-        self, show_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+        self, show_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> list[models.SimpleShow]:
         """Get Spotify catalog information for several shows.
 
@@ -1407,8 +1946,8 @@ class REST:
         show_ids : list[str]
             The IDs of the shows.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -1425,23 +1964,23 @@ class REST:
         self,
         show_id: str,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.SimpleEpisode]:
-        """Get Spotify catalog information about an shows's episodes.
+        """Get Spotify catalog information about a shows's episodes.
 
         Parameters
         ----------
         show_id : str
             The ID of the show.
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -1458,21 +1997,17 @@ class REST:
     async def get_users_saved_shows(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SavedShow]:
-        """Get a list of the shows saved in the current user's library.
+        """Get a list of the shows saved in the current user's 'Your Music' library.
 
         Parameters
         ----------
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
-        market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
 
         Returns
         -------
@@ -1481,16 +2016,16 @@ class REST:
         """
         shows = await self.get(
             "me/shows",
-            params={"limit": limit, "offset": offset, "market": market},
+            params={"limit": limit, "offset": offset},
         )
         assert shows is not None
         return models.Paginator[models.SavedShow].model_validate_json(shows)
 
-    async def save_shows_for_user(
+    async def save_shows_for_current_user(
         self,
         show_ids: list[str],
     ) -> None:
-        """Save one or more shows to the current user's library.
+        """Save one or more shows to the current user's 'Your Music' library.
 
         Parameters
         ----------
@@ -1500,27 +2035,27 @@ class REST:
         await self.put("me/shows", params={"ids": ",".join(show_ids)})
 
     async def remove_users_saved_shows(
-        self, show_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+        self, show_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> None:
-        """Remove one or more shows from the current user's library.
+        """Remove one or more shows from the current user's 'Your Music' library.
 
         Parameters
         ----------
         show_ids : list[str]
             The IDs of the shows. Maximum: 50.
         market : str, optional
-            Only modify content that is available in that market (I think, I'm honestly not sure why this field is included here).
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only modify content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
         """
         await self.delete("me/shows", params={"ids": ",".join(show_ids), "market": market})
 
     async def check_users_saved_shows(self, show_ids: list[str]) -> list[bool]:
-        """Check if one or more shows is already saved in the current user's library.
+        """Check if one or more shows is already saved in the current user's 'Your Music' library.
 
         Parameters
         ----------
         show_ids : list[str]
-            The IDs of the shows. Maximum: 20.
+            The IDs of the shows. Maximum: 50.
 
         Returns
         -------
@@ -1532,7 +2067,7 @@ class REST:
         return json_.loads(shows)
 
     async def get_track(
-        self, track_id: str, *, market: str | types_.MissingType = types_.MISSING
+        self, track_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.TrackWithSimpleArtist:
         """Get Spotify catalog information for a single track.
 
@@ -1541,12 +2076,12 @@ class REST:
         track_id : str
             The ID of the track.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
-        models.Track
+        models.TrackWithSimpleArtist
             The requested track.
         """
         track = await self.get(f"tracks/{track_id}", params={"market": market})
@@ -1554,7 +2089,7 @@ class REST:
         return models.TrackWithSimpleArtist.model_validate_json(track)
 
     async def get_several_tracks(
-        self, track_ids: list[str], *, market: str | types_.MissingType = types_.MISSING
+        self, track_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> list[models.TrackWithSimpleArtist]:
         """Get Spotify catalog information for several tracks.
 
@@ -1563,12 +2098,12 @@ class REST:
         track_ids : list[str]
             The IDs of the tracks. Maximum: 50.
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
-        list[models.Track]
+        list[models.TrackWithSimpleArtist]
             The requested tracks.
         """
         tracks = await self.get("tracks", params={"ids": ",".join(track_ids), "market": market})
@@ -1578,21 +2113,21 @@ class REST:
     async def get_users_saved_tracks(
         self,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
     ) -> models.Paginator[models.SavedTrack]:
         """Get a list of the tracks saved in the current user's 'Your Music' library.
 
         Parameters
         ----------
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item).
         market : str, optional
-            Only get content that is available in that market.
-            Must be an `ISO 3166-1 alpha-2 country code <https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
 
         Returns
         -------
@@ -1665,7 +2200,7 @@ class REST:
     async def get_several_tracks_audio_features(
         self, track_ids: list[str]
     ) -> list[models.AudioFeatures]:
-        """Get audio features for several tracks.
+        """Get audio feature information for several tracks.
 
         Parameters
         ----------
@@ -1674,7 +2209,7 @@ class REST:
 
         Returns
         -------
-        list[AudioFeatures]
+        list[models.AudioFeatures]
             The tracks' audio features.
         """
         features = await self.get("audio-features", params={"ids": ",".join(track_ids)})
@@ -1684,7 +2219,7 @@ class REST:
     async def get_tracks_audio_analysis(self, track_id: str) -> models.AudioAnalysis:
         """Get a low-level audio analysis for a track in the Spotify catalog.
         The audio analysis describes the track's structure and musical content,
-        including rhythm, pitch, and timbre.
+        including rhythm, pitch and timbre.
 
         Parameters
         ----------
@@ -1702,56 +2237,168 @@ class REST:
 
     async def get_recommendations(
         self,
-        seed_artists: list[str] | types_.MissingType = types_.MISSING,
-        seed_genres: list[str] | types_.MissingType = types_.MISSING,
-        seed_tracks: list[str] | types_.MissingType = types_.MISSING,
+        seed_artists: MissingOr[list[str]] = MISSING,
+        seed_genres: MissingOr[list[str]] = MISSING,
+        seed_tracks: MissingOr[list[str]] = MISSING,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        market: str | types_.MissingType = types_.MISSING,
-        min_acousticness: float | types_.MissingType = types_.MISSING,
-        max_acousticness: float | types_.MissingType = types_.MISSING,
-        target_acousticness: float | types_.MissingType = types_.MISSING,
-        min_danceability: float | types_.MissingType = types_.MISSING,
-        max_danceability: float | types_.MissingType = types_.MISSING,
-        target_danceability: float | types_.MissingType = types_.MISSING,
-        # TODO: this should be duration, not duration_ms
-        min_duration_ms: int | types_.MissingType = types_.MISSING,
-        max_duration_ms: int | types_.MissingType = types_.MISSING,
-        target_duration_ms: int | types_.MissingType = types_.MISSING,
-        min_energy: float | types_.MissingType = types_.MISSING,
-        max_energy: float | types_.MissingType = types_.MISSING,
-        target_energy: float | types_.MissingType = types_.MISSING,
-        min_instrumentalness: float | types_.MissingType = types_.MISSING,
-        max_instrumentalness: float | types_.MissingType = types_.MISSING,
-        target_instrumentalness: float | types_.MissingType = types_.MISSING,
-        min_key: int | types_.MissingType = types_.MISSING,
-        max_key: int | types_.MissingType = types_.MISSING,
-        target_key: int | types_.MissingType = types_.MISSING,
-        min_liveness: float | types_.MissingType = types_.MISSING,
-        max_liveness: float | types_.MissingType = types_.MISSING,
-        target_liveness: float | types_.MissingType = types_.MISSING,
-        min_loudness: float | types_.MissingType = types_.MISSING,
-        max_loudness: float | types_.MissingType = types_.MISSING,
-        target_loudness: float | types_.MissingType = types_.MISSING,
-        min_mode: int | types_.MissingType = types_.MISSING,
-        max_mode: int | types_.MissingType = types_.MISSING,
-        target_mode: int | types_.MissingType = types_.MISSING,
-        min_popularity: int | types_.MissingType = types_.MISSING,
-        max_popularity: int | types_.MissingType = types_.MISSING,
-        target_popularity: int | types_.MissingType = types_.MISSING,
-        min_speechiness: float | types_.MissingType = types_.MISSING,
-        max_speechiness: float | types_.MissingType = types_.MISSING,
-        target_speechiness: float | types_.MissingType = types_.MISSING,
-        min_tempo: float | types_.MissingType = types_.MISSING,
-        max_tempo: float | types_.MissingType = types_.MISSING,
-        target_tempo: float | types_.MissingType = types_.MISSING,
-        min_time_signature: int | types_.MissingType = types_.MISSING,
-        max_time_signature: int | types_.MissingType = types_.MISSING,
-        target_time_signature: int | types_.MissingType = types_.MISSING,
-        min_valence: float | types_.MissingType = types_.MISSING,
-        max_valence: float | types_.MissingType = types_.MISSING,
-        target_valence: float | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        market: MissingOr[str] = MISSING,
+        min_acousticness: MissingOr[float] = MISSING,
+        max_acousticness: MissingOr[float] = MISSING,
+        target_acousticness: MissingOr[float] = MISSING,
+        min_danceability: MissingOr[float] = MISSING,
+        max_danceability: MissingOr[float] = MISSING,
+        target_danceability: MissingOr[float] = MISSING,
+        min_duration: MissingOr[datetime.timedelta] = MISSING,
+        max_duration: MissingOr[datetime.timedelta] = MISSING,
+        target_duration: MissingOr[datetime.timedelta] = MISSING,
+        min_energy: MissingOr[float] = MISSING,
+        max_energy: MissingOr[float] = MISSING,
+        target_energy: MissingOr[float] = MISSING,
+        min_instrumentalness: MissingOr[float] = MISSING,
+        max_instrumentalness: MissingOr[float] = MISSING,
+        target_instrumentalness: MissingOr[float] = MISSING,
+        min_key: MissingOr[int] = MISSING,
+        max_key: MissingOr[int] = MISSING,
+        target_key: MissingOr[int] = MISSING,
+        min_liveness: MissingOr[float] = MISSING,
+        max_liveness: MissingOr[float] = MISSING,
+        target_liveness: MissingOr[float] = MISSING,
+        min_loudness: MissingOr[float] = MISSING,
+        max_loudness: MissingOr[float] = MISSING,
+        target_loudness: MissingOr[float] = MISSING,
+        min_mode: MissingOr[int] = MISSING,
+        max_mode: MissingOr[int] = MISSING,
+        target_mode: MissingOr[int] = MISSING,
+        min_popularity: MissingOr[int] = MISSING,
+        max_popularity: MissingOr[int] = MISSING,
+        target_popularity: MissingOr[int] = MISSING,
+        min_speechiness: MissingOr[float] = MISSING,
+        max_speechiness: MissingOr[float] = MISSING,
+        target_speechiness: MissingOr[float] = MISSING,
+        min_tempo: MissingOr[float] = MISSING,
+        max_tempo: MissingOr[float] = MISSING,
+        target_tempo: MissingOr[float] = MISSING,
+        min_time_signature: MissingOr[int] = MISSING,
+        max_time_signature: MissingOr[int] = MISSING,
+        target_time_signature: MissingOr[int] = MISSING,
+        min_valence: MissingOr[float] = MISSING,
+        max_valence: MissingOr[float] = MISSING,
+        target_valence: MissingOr[float] = MISSING,
     ) -> models.Recommendations:
+        """Get recommendations based on other artists, genres and/or tracks.
+
+        !!! note
+            One of `seed_artists`, `seed_genres` and `seed_tracks` must be provided.
+            Up to 5 seed values may be provided in any combination of `seed_artists`,
+            `seed_genres` and `seed_tracks`.
+
+        Parameters
+        ----------
+        seed_artists : list[str], optional
+            IDs of seed artists.
+        seed_genres : list[str], optional
+            Seed genres.
+        seed_tracks : list[str], optional
+            IDs of seed tracks.
+        limit : int, default: 20
+            The target size of the list of recommended tracks. For seeds with unusually small pools or
+            when highly restrictive filtering is applied, it may be impossible to generate the requested
+            number of recommended tracks. Debugging information for such cases is available in the response.
+            Default: 20. Minimum: 1. Maximum: 100.
+        market : str, optional
+            Only get content available in that market.
+            Must be an [ISO 3166-1 alpha-2 country code](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+        min_acousticness : float, optional
+            Minimum acousticness. Range: `0.0` - `1.0`.
+        max_acousticness : float, optional
+            Maximum acousticness. Range: `0.0` - `1.0`.
+        target_acousticness : float, optional
+            Target acousticness. Range: `0.0` - `1.0`.
+        min_danceability : float, optional
+            Minimum danceability. Range: `0.0` - `1.0`.
+        max_danceability : float, optional
+            Maximum danceability. Range: `0.0` - `1.0`.
+        target_danceability : float, optional
+            Target danceability. Range: `0.0` - `1.0`.
+        min_duration : datetime.timedelta, optional
+            Minimum duration.
+        max_duration : datetime.timedelta, optional
+            Maximum duration.
+        target_duration : datetime.timedelta, optional
+            Target duration.
+        min_energy : float, optional
+            Minimum energy. Range: `0.0` - `1.0`.
+        max_energy : float, optional
+            Maximum energy. Range: `0.0` - `1.0`.
+        target_energy : float, optional
+            Target energy. Range: `0.0` - `1.0`.
+        min_instrumentalness : float, optional
+            Minimum instrumentalness. Range: `0.0` - `1.0`.
+        max_instrumentalness : float, optional
+            Maximum instrumentalness. Range: `0.0` - `1.0`.
+        target_instrumentalness : float, optional
+            Target instrumentalness. Range: `0.0` - `1.0`.
+        min_key : int, optional
+            Minimum key. Range: `0` - `11`.
+        max_key : int, optional
+            Maximum instrumentalness. Range: `0` - `11`.
+        target_key : int, optional
+            Target instrumentalness. Range: `0` - `11`.
+        min_liveness : float, optional
+            Minimum liveness. Range: `0.0` - `1.0`.
+        max_liveness : float, optional
+            Maximum liveness. Range: `0.0` - `1.0`.
+        target_liveness : float, optional
+            Target liveness. Range: `0.0` - `1.0`.
+        min_loudness : float, optional
+            Minimum loudness. Range: `0.0` - `1.0`.
+        max_loudness : float, optional
+            Maximum loudness. Range: `0.0` - `1.0`.
+        target_loudness : float, optional
+            Target loudness. Range: `0.0` - `1.0`.
+        min_mode : int, optional
+            Minimum mode. Range: `0.0` - `1.0`.
+        max_mode : int, optional
+            Maximum mode. Range: `0.0` - `1.0`.
+        target_mode : int, optional
+            Target mode. Range: `0.0` - `1.0`.
+        min_popularity : int, optional
+            Minimum popularity. Range: `0` - `100`.
+        max_popularity : int, optional
+            Maximum popularity. Range: `0` - `100`.
+        target_popularity : int, optional
+            Target popularity. Range: `0` - `100`.
+        min_speechiness : float, optional
+            Minimum speechiness. Range: `0.0` - `1.0`.
+        max_speechiness : float, optional
+            Maximum speechiness. Range: `0.0` - `1.0`.
+        target_speechiness : float, optional
+            Target speechiness. Range: `0.0` - `1.0`.
+        min_tempo : float, optional
+            Minimum tempo.
+        max_tempo : float, optional
+            Maximum tempo.
+        target_tempo : float, optional
+            Target tempo.
+        min_time_signature : int, optional
+            Minimum time signature. Maximum: `11`.
+        max_time_signature : int, optional
+            Maximum time signature.
+        target_time_signature : int, optional
+            Target time signature.
+        min_valence : float, optional
+            Minimum valence. Range: `0.0` - `1.0`.
+        max_valence : float, optional
+            Maximum valence. Range: `0.0` - `1.0`.
+        target_valence : float, optional
+            Target valence. Range: `0.0` - `1.0`.
+        """
+        if seed_artists is MISSING and seed_genres is MISSING and seed_tracks is MISSING:
+            raise ValueError(
+                "one of `seed_artists`, `seed_genres` and `seed_tracks` must be provided"
+            )
+
         recommendations = await self.get(
             "recommendations",
             params={
@@ -1766,9 +2413,15 @@ class REST:
                 "min_danceability": min_danceability,
                 "max_danceability": max_danceability,
                 "target_danceability": target_danceability,
-                "min_duration_ms": min_duration_ms,
-                "max_duration_ms": max_duration_ms,
-                "target_duration_ms": target_duration_ms,
+                "min_duration_ms": min_duration.total_seconds() * 1000
+                if min_duration is not MISSING
+                else MISSING,
+                "max_duration_ms": max_duration.total_seconds() * 1000
+                if max_duration is not MISSING
+                else MISSING,
+                "target_duration_ms": target_duration.total_seconds() * 1000
+                if target_duration is not MISSING
+                else MISSING,
                 "min_energy": min_energy,
                 "max_energy": max_energy,
                 "target_energy": target_energy,
@@ -1808,6 +2461,13 @@ class REST:
         return models.Recommendations.model_validate_json(recommendations)
 
     async def get_current_users_profile(self) -> models.OwnUser:
+        """Get detailed profile information about the current user.
+
+        Returns
+        -------
+        models.OwnUser
+            The current user.
+        """
         user = await self.get("me")
         assert user is not None
         return models.OwnUser.model_validate_json(user)
@@ -1815,43 +2475,43 @@ class REST:
     @typing.overload
     async def get_users_top_items(
         self,
-        type: typing.Literal[enums.TopItemType.ARTISTS] = enums.TopItemType.ARTISTS,
+        type: typing.Literal[enums.TopItemType.ARTISTS],
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        time_range: enums.TimeRange | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        time_range: MissingOr[enums.TimeRange] = MISSING,
     ) -> models.Paginator[models.Artist]: ...
 
     @typing.overload
     async def get_users_top_items(
         self,
-        type: typing.Literal[enums.TopItemType.TRACKS] = enums.TopItemType.TRACKS,
+        type: typing.Literal[enums.TopItemType.TRACKS],
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        time_range: enums.TimeRange | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        time_range: MissingOr[enums.TimeRange] = MISSING,
     ) -> models.Paginator[models.TrackWithSimpleArtist]: ...
 
     async def get_users_top_items(
         self,
-        type: enums.TopItemType = enums.TopItemType.ARTISTS,
+        type: enums.TopItemType,
         *,
-        limit: int | types_.MissingType = types_.MISSING,
-        offset: int | types_.MissingType = types_.MISSING,
-        time_range: enums.TimeRange | types_.MissingType = types_.MISSING,
+        limit: MissingOr[int] = MISSING,
+        offset: MissingOr[int] = MISSING,
+        time_range: MissingOr[enums.TimeRange] = MISSING,
     ) -> models.Paginator[models.Artist] | models.Paginator[models.TrackWithSimpleArtist]:
         """Get the current user's top artists or tracks based on calculated affinity.
 
         Parameters
         ----------
-        type : enums.TopItemType, optional
-            The type of entity to return. Default: enums.TopItemType.ARTISTS
-        limit : int, optional
+        type : enums.TopItemType
+            The type of entity to return.
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
-        offset : int, optional
+        offset : int, default: 0
             The index of the first item to return. Default: 0 (the first item)
-        time_range : enums.TimeRange, optional
-            Over what time frame the affinities are computed. Default: ``enums.TimeRange.MEDIUM_TERM``
+        time_range : enums.TimeRange, default: Medium Term
+            Over what time frame the affinities are computed.
 
         Returns
         -------
@@ -1863,9 +2523,7 @@ class REST:
             params={
                 "limit": limit,
                 "offset": offset,
-                "time_range": time_range.value
-                if not isinstance(time_range, types_.MissingType)
-                else types_.MISSING,
+                "time_range": time_range.value if time_range is not MISSING else MISSING,
             },
         )
         assert items is not None
@@ -1898,7 +2556,7 @@ class REST:
     async def follow_playlist(
         self,
         playlist_id: str,
-        public: bool | types_.MissingType = types_.MISSING,
+        public: MissingOr[bool] = MISSING,
     ) -> None:
         """Add the current user as a follower of a playlist.
 
@@ -1906,8 +2564,8 @@ class REST:
         ----------
         playlist_id : str
             The ID of the playlist.
-        public : bool, optional
-            Whether or not the playlist will be included in the user's public playlists. Default: ``True``
+        public : bool, default: True
+            Whether or not the playlist will be included in the user's public playlists (added to profile).
         """
         await self.put(f"playlists/{playlist_id}/followers", json={"public": public})
 
@@ -1926,8 +2584,8 @@ class REST:
 
     async def get_followed_artists(
         self,
-        after: str | types_.MissingType = types_.MISSING,
-        limit: int | types_.MissingType = types_.MISSING,
+        after: MissingOr[str] = MISSING,
+        limit: MissingOr[int] = MISSING,
     ) -> models.CursorPaginator[models.Artist]:
         """Get the current user's followed artists.
 
@@ -1935,12 +2593,12 @@ class REST:
         ----------
         after : str, optional
             The last artist ID retrieved from the previous request.
-        limit : int, optional
+        limit : int, default: 20
             The maximum number of items to return. Default: 20. Minimum: 1. Maximum: 50.
 
         Returns
         -------
-        models.Paginator[models.Artist]
+        models.CursorPaginator[models.Artist]
             A paginator who's items are a list of artists.
         """
         followed = await self.get(
@@ -1954,22 +2612,26 @@ class REST:
         ids: list[str],
         type: enums.UserType,
     ) -> None:
-        """Add the current user as a follower of one or more artists.
+        """Add the current user as a follower of one or more artists or other Spotify users.
 
         Parameters
         ----------
-        artist_ids : list[str]
+        ids : list[str]
             The IDs of the artists. Maximum: 50.
+        type : enums.UserType
+            The user type (user/artist).
         """
         await self.put("me/following", params={"ids": ",".join(ids), "type": type.value})
 
     async def unfollow_artists_or_users(self, ids: list[str], type: enums.UserType) -> None:
-        """Remove the current user as a follower of one or more artists.
+        """Remove the current user as a follower of one or more artists or other Spotify users.
 
         Parameters
         ----------
-        artist_ids : list[str]
+        ids : list[str]
             The IDs of the artists. Maximum: 50.
+        type : enums.UserType
+            The user type (user/artist).
         """
         await self.delete("me/following", params={"ids": ",".join(ids), "type": type.value})
 
@@ -1978,17 +2640,19 @@ class REST:
         ids: list[str],
         type: enums.UserType,
     ) -> list[bool]:
-        """Check to see if the current user is following one or more artists.
+        """Check to see if the current user is following one or more artists or other Spotify users.
 
         Parameters
         ----------
-        artist_ids : list[str]
+        ids : list[str]
             The IDs of the artists. Maximum: 50.
+        type : enums.UserType
+            The user type (user/artist).
 
         Returns
         -------
         list[bool]
-            A list of booleans dictating whether or not the current user has followed the corresponding artists.
+            A list of booleans dictating whether or not the current user has followed the corresponding users or artists.
         """
         follows = await self.get(
             "me/following/contains", params={"ids": ",".join(ids), "type": type.value}
@@ -2000,19 +2664,17 @@ class REST:
         self,
         playlist_id: str,
     ) -> bool:
-        """Check to see if one or more Spotify users are following a specified playlist.
+        """Check to see if the current user is following a specified playlist.
 
         Parameters
         ----------
         playlist_id : str
             The ID of the playlist.
-        user_ids : list[str]
-            The IDs of the users. Maximum: 5.
 
         Returns
         -------
-        list[bool]
-            A list of booleans dictating whether or not the corresponding users have followed the playlist.
+        bool
+            Whether or not the current user is following the playlist.
         """
         follows = await self.get(
             f"playlists/{playlist_id}/followers/contains",

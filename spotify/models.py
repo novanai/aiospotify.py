@@ -51,8 +51,9 @@ class SimpleAlbum(BaseModel):
     ([ISO 3166-1 alpha-2 country codes](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)).
     `None` if a market was specified in the request.
     
-    > [!note]
-    > An album is considered available in a market when at least 1 of its tracks is available in that market.
+    !!! note
+
+        An album is considered available in a market when at least 1 of its tracks is available in that market.
     """
     external_urls: ExternalURLs
     """Known external URLs for the album."""
@@ -65,13 +66,14 @@ class SimpleAlbum(BaseModel):
     name: str
     """The name of the album.
 
-    > [!note]
-    > In case of an album takedown, the value may be an empty string.
+    !!! note
+    
+        In case of an album takedown, the value may be an empty string.
     """
     release_date: datetime.date
     """The date the album was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which `SimpleAlbum.release_date` is known."""
+    """The precision with which [`release_date`][spotify.models.SimpleAlbum.release_date] is known."""
     restrictions: Restrictions | None = None
     """Restrictions applied to the album. Included when a content restriction is applied."""
     uri: str
@@ -614,7 +616,7 @@ class SimpleEpisode(BaseModel):
     is_playable: bool | None = None
     """True if the episode is playable in the given market. Otherwise false. May be None in some situations."""
     languages: list[str]
-    """A list of the languages used in the episode, identified by their `ISO 639-1 code <https://en.wikipedia.org/wiki/ISO_639>`_."""
+    """A list of the languages used in the episode, identified by their [ISO 639-1 code](https://en.wikipedia.org/wiki/ISO_639)."""
     name: str
     """The name of the episode."""
     release_date: datetime.date
@@ -970,7 +972,8 @@ class SimpleShow(BaseModel):
     """A simplified show."""
 
     available_markets: list[str]
-    """A list of the countries in which the show can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    """A list of the countries in which the show can be played, identified by their
+    [ISO 3166-1 alpha-2 code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)."""
     copyrights: list[Copyright]
     """The copyright statements of the show."""
     description: str
@@ -990,7 +993,7 @@ class SimpleShow(BaseModel):
     is_externally_hosted: bool | None
     """True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be `None` in some cases."""
     languages: list[str]
-    """A list of the languages used in the show, identified by their `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
+    """A list of the languages used in the show, identified by their [ISO 639 code](https://en.wikipedia.org/wiki/ISO_639)."""
     media_type: str
     """The media type of the show."""
     name: str
@@ -1060,7 +1063,8 @@ class TrackBase(LinkedFromTrack, typing.Generic[ArtistT]):
     artists: list[ArtistT]
     """The artists who performed the track."""
     available_markets: list[str] | None = None
-    """A list of the countries in which the track can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+    """A list of the countries in which the track can be played, identified by their
+    [ISO 3166-1 alpha-2 code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
     Returns `None` if a market was specified in the request."""
     disc_number: int
     """The disc number (usually `1` unless the album consists of more than one disc)."""
@@ -1070,10 +1074,11 @@ class TrackBase(LinkedFromTrack, typing.Generic[ArtistT]):
     """Whether or not the track has explicit lyrics."""
     is_playable: bool | None = None
     """Whether or not the track is playable in the given market.
-    Present when `Track Relinking <https://developer.spotify.com/documentation/general/guides/track-relinking-guide/>`_ is applied."""
+    Present when [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking) is applied."""
     linked_from: LinkedFromTrack | None = None
-    """Present when `Track Relinking <https://developer.spotify.com/documentation/general/guides/track-relinking-guide/>`_ is applied, and the requested track has been replaced with a different track.
-    The track in the linked_from object contains information about the originally requested track."""
+    """Present when [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking) is applied,
+    and the requested track has been replaced with a different track. The track in the linked_from object contains information
+    about the originally requested track."""
     restrictions: Restrictions | None = None
     """Present when restrictions are applied to the track."""
     name: str
@@ -1135,7 +1140,8 @@ class OwnUser(User):
     """A user with additional information."""
 
     country: str | None = None
-    """The country of the user, as set in the user's account profile. An `ISO 3166-1 alpha-2 country code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
+    """The country of the user, as set in the user's account profile. An
+    [ISO 3166-1 alpha-2 country code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
     This field is only available when the current user has granted access to the `user-read-private` scope."""
     email: str | None = None
     """The user's email address, as entered by the user when creating their account.

@@ -35,7 +35,7 @@ class AuthorizationCodeFlow:
     """Implementation to help with the Authorization Code Flow by storing and refreshing access
     tokens.
 
-    Spotify Reference: https://developer.spotify.com/documentation/general/guides/authorization/code-flow/
+    Spotify Reference: <https://developer.spotify.com/documentation/web-api/tutorials/code-flow>
 
     Parameters
     ----------
@@ -306,7 +306,7 @@ class ClientCredentialsFlow:
     """Implementation to help with the Client Credentials Flow by storing and refreshing access
     tokens.
 
-    Spotify Reference: https://developer.spotify.com/documentation/general/guides/authorization/client-credentials/
+    Spotify Reference: <https://developer.spotify.com/documentation/web-api/tutorials/client-credentials-flow>
 
     Parameters
     ----------

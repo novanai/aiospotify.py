@@ -5,8 +5,8 @@ import typing
 
 __all__: typing.Sequence[str] = (
     "MISSING",
-    "MissingType",
     "MissingOr",
+    "MissingType",
 )
 
 if typing.TYPE_CHECKING:
@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
 
 
 class MissingType:
-    """The type of the `spotify.types.MISSING` singleton sentinel value."""
+    """The type of the [`MISSING`][`spotify.types.MISSING`] singleton sentinel value."""
 
     __slots__: typing.Sequence[str] = ()
 
