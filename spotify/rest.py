@@ -2515,8 +2515,10 @@ class API:
 
         Returns
         -------
-        models.Paginator
-            A paginator who's items are a list of tracks or artists.
+        models.Paginator[models.Artist]
+            A paginator who's items are a list of artists.
+        models.Paginator[models.TrackWithSimpleArtist]
+            A paginator who's items are a list of tracks.
         """
         items = await self.get(
             f"me/top/{type.value}",
