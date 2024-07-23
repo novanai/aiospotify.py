@@ -76,14 +76,12 @@ class API:
             elif r.content_type == "application/json":
                 json_data = json_.loads(data)
                 if json_data.get("error"):
-                    json_data = json_data["error"]
-                else:
-                    json_data = {"status": r.status, "message": r.reason}
-                raise errors.APIError(**json_data)  # pyright: ignore[reportArgumentType]
+                    raise errors.APIError(**json_data["error"])
 
-            # TODO: might be worth raising APIError with the aiohttp error as an attribute?
-
-            r.raise_for_status()
+            raise errors.APIError(
+                status=r.status,
+                message=r.reason,
+            )
 
     async def get(
         self,

@@ -11,6 +11,12 @@ T = typing.TypeVar("T")
 
 
 class BaseModel(pydantic.BaseModel):
+    # Occasionally, this value for this field is upper case, so we convert it to lower case
+    @pydantic.field_validator("album_type", mode="before", check_fields=False)
+    @classmethod
+    def album_type_validator(cls, v: str):
+        return v.lower()
+
     @pydantic.field_validator("release_date", mode="before", check_fields=False)
     @classmethod
     def release_date_validator(cls, v: str | None) -> datetime.datetime | None:
@@ -19,16 +25,11 @@ class BaseModel(pydantic.BaseModel):
 
         return utils.datetime_from_timestamp(v)
 
+class DurationMS(pydantic.BaseModel):
     @pydantic.field_validator("duration", mode="before", check_fields=False)
     @classmethod
     def duration_validator(cls, v: int) -> float:
         return v / 1000
-
-    @pydantic.field_validator("album_type", mode="before", check_fields=False)
-    @classmethod
-    def album_type_validator(cls, v: str):
-        return v.lower()
-
 
 class SavedAlbum(BaseModel):
     """Information about an album saved to a user's 'Your Music' library."""
@@ -202,8 +203,7 @@ class Author(BaseModel):
     """The name of the author."""
 
 
-# TODO: check the attribute linking is correct for all audio feature/analysis models
-class AudioFeatures(BaseModel):
+class AudioFeatures(BaseModel, DurationMS):
     """Track audio features."""
 
     acousticness: float
@@ -437,7 +437,7 @@ class AudioAnalysisTrack(BaseModel):
     [`rhythmstring`][spotify.models.AudioAnalysisTrack.rhythmstring] field.
     """
 
-# TODO: remove duplicate alternate duration validators
+
 class AudioAnalysisBar(BaseModel):
     """Audio analysis of a bar. A bar (or measure) is a segment of time defined as a given number
     of beats.
@@ -449,13 +449,6 @@ class AudioAnalysisBar(BaseModel):
     """The duration of the time interval."""
     confidence: float
     """The confidence, from `0.0` to `1.0`, of the reliability of the interval."""
-
-    # Override for the default duration validator, as this one is in 
-    # seconds instead of milliseconds
-    @pydantic.field_validator("duration", mode="before", check_fields=False)
-    @classmethod
-    def duration_validator(cls, v: int) -> float:
-        return v
 
 
 class AudioAnalysisBeat(BaseModel):
@@ -469,13 +462,6 @@ class AudioAnalysisBeat(BaseModel):
     """The duration of the time interval."""
     confidence: float
     """The confidence, from `0.0` to `1.0`, of the reliability of the interval."""
-
-    # Override for the default duration validator, as this one is in 
-    # seconds instead of milliseconds
-    @pydantic.field_validator("duration", mode="before", check_fields=False)
-    @classmethod
-    def duration_validator(cls, v: int) -> float:
-        return v
 
 
 class AudioAnalysisSection(BaseModel):
@@ -539,13 +525,6 @@ class AudioAnalysisSection(BaseModel):
     [`time_signature`][spotify.models.AudioAnalysisSection.time_signature]. Sections with time
     signature changes may correspond to low values in this field.
     """
-
-    # Override for the default duration validator, as this one is in 
-    # seconds instead of milliseconds
-    @pydantic.field_validator("duration", mode="before", check_fields=False)
-    @classmethod
-    def duration_validator(cls, v: int) -> float:
-        return v
 
 
 class AudioAnalysisSegment(BaseModel):
@@ -621,13 +600,6 @@ class AudioAnalysisSegment(BaseModel):
     with each other.
     """
 
-    # Override for the default duration validator, as this one is in 
-    # seconds instead of milliseconds
-    @pydantic.field_validator("duration", mode="before", check_fields=False)
-    @classmethod
-    def duration_validator(cls, v: int) -> float:
-        return v
-
 
 class AudioAnalysisTatum(BaseModel):
     """Audio analysis tatum. A tatum represents the lowest regular pulse train that a listener
@@ -640,13 +612,6 @@ class AudioAnalysisTatum(BaseModel):
     """The duration of the time interval."""
     confidence: float
     """The confidence, from `0.0` to `1.0`, of the reliability of the interval."""
-
-    # Override for the default duration validator, as this one is in 
-    # seconds instead of milliseconds
-    @pydantic.field_validator("duration", mode="before", check_fields=False)
-    @classmethod
-    def duration_validator(cls, v: int) -> float:
-        return v
 
 
 class Category(BaseModel):
@@ -661,8 +626,8 @@ class Category(BaseModel):
     name: str
     """The name of the category."""
 
-# TODO: link to scopes
-class SimpleChapter(BaseModel):
+
+class SimpleChapter(BaseModel, DurationMS):
     """A simplified chapter."""
 
     audio_preview_url: str | None
@@ -742,7 +707,7 @@ class SavedEpisode(BaseModel):
     """The episode."""
 
 
-class SimpleEpisode(BaseModel):
+class SimpleEpisode(BaseModel, DurationMS):
     """A simplified episode."""
 
     audio_preview_url: str | None
@@ -1065,8 +1030,7 @@ class PlaylistItem(BaseModel):
     """
     is_local: bool
     """Whether this track or episode is a local file or not."""
-    # TODO: rename field to `item`
-    track: TrackWithSimpleArtist | Episode | None
+    item: TrackWithSimpleArtist | Episode | None
     """Information about the track or episode."""
 
 
@@ -1258,7 +1222,7 @@ class LinkedFromTrack(BaseModel):
     """The Spotify URI for the track."""
 
 
-class TrackBase(LinkedFromTrack, typing.Generic[ArtistT]):
+class TrackBase(LinkedFromTrack, DurationMS, typing.Generic[ArtistT]):
     """Base class for a track."""
 
     artists: list[ArtistT]
