@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import typing
 
-__all__: typing.Sequence[str] = (
-    "MISSING",
-    "MissingOr",
-    "MissingType",
-)
-
 if typing.TYPE_CHECKING:
     from typing import Self
+
+__all__: typing.Sequence[str] = (
+    "MissingType",
+    "MISSING",
+    "MissingOr",
+)
 
 
 class MissingType:

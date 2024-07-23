@@ -1,6 +1,5 @@
 """An asynchronous Python 3.10+ Spotify Web API wrapper."""
 
-from spotify import utils
 from spotify.enums import *
 from spotify.errors import *
 from spotify.models import *

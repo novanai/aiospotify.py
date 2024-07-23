@@ -12,3 +12,8 @@ def format(session: nox.Session) -> None:
 def typing(session: nox.Session) -> None:
     session.install("pyright==1.1.372", "-r", "requirements.txt")
     session.run("pyright", "spotify")
+
+@nox.session
+def docs(session: nox.Session) -> None:
+    session.install("-r", "requirements_docs.txt")
+    session.run("mkdocs", "build")

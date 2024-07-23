@@ -62,6 +62,8 @@ extra_javascript:
 
 plugins:
 - search
+- minify:
+    minify_html: true
 - mkdocstrings:
     handlers:
       python:

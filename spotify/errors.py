@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import typing
+
 import pydantic
+
+__all__: typing.Sequence[str] = ("APIError", "InvalidPayloadError")
 
 
 @pydantic.dataclasses.dataclass

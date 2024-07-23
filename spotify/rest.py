@@ -15,6 +15,8 @@ from spotify.types import MISSING, MissingOr
 if typing.TYPE_CHECKING:
     from spotify import oauth
 
+__all__: typing.Sequence[str] = ("API",)
+
 P = typing.ParamSpec("P")
 T = typing.TypeVar("T")
 
@@ -810,8 +812,6 @@ class API:
         assert episode is not None
         return models.Episode.model_validate_json(episode)
 
-    # NOTE: market is required on this endpoint when not using a user token
-    # otherwise a list of null objects is returned - RAISING VALIDATION ERROR
     @validator
     async def get_several_episodes(
         self,
@@ -1918,7 +1918,6 @@ class API:
         models.SearchResult
             The search result.
         """
-        # NOTE: upon testing, searching for shows and episodes is broken on spotify's side.
         if len(types) < 1:
             raise ValueError("`types` may not be empty")
 

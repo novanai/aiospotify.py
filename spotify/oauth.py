@@ -9,6 +9,12 @@ import aiohttp
 
 from spotify import enums, errors, utils
 
+__all__: typing.Sequence[str] = (
+    "build_auth_token",
+    "AuthorizationCodeFlow",
+    "ClientCredentialsFlow",
+)
+
 
 def build_auth_token(client_id: str, client_secret: str) -> str:
     """Build an authorization token from the client ID and secret.
