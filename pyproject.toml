@@ -1,5 +1,45 @@
+[project]
+name = "aiospotify"
+dynamic = ["version"]
+authors = [ { name="novanai" } ]
+description = "An asynchronous Python 3.10+ Spotify Web API wrapper."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "aiohttp==3.9.5",
+  "pydantic==2.8.2",
+]
+keywords = ["spotify", "api", "async", "asynchronous"]
+classifiers = [
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+]
+license = {file = "LICENSE"}
+
+[project.urls]
+Documentation = "https://aiospotify.readthedocs.io/en/latest/"
+Repository = "https://github.com/novanai/aiospotify"
+Issues = "https://github.com/novanai/aiospotify/issues"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["spotify"]
+
+[tool.setuptools.dynamic]
+version = {attr = "spotify.__version__"}
+
 [tool.ruff]
+exclude = ["docs", "site"]
 line-length = 99
+target-version = "py310"
 
 [tool.pyright]
 strict = ["spotify"]
