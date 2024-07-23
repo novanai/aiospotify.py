@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import typing
-
 import pydantic
 
 from spotify import models
@@ -23,62 +21,64 @@ from spotify.models import (
     SimpleTrack,
 )
 
+# TODO: test all endpoints which use these models
 
-class _Albums(pydantic.BaseModel):
+
+class Albums(pydantic.BaseModel):
     albums: list[models.Album]
 
 
-class _SimpleAlbumPaginator(pydantic.BaseModel):
+class SimpleAlbumPaginator(pydantic.BaseModel):
     paginator: models.Paginator[models.SimpleAlbum] = pydantic.Field(alias="albums")
 
 
-class _Artists(pydantic.BaseModel):
+class Artists(pydantic.BaseModel):
     artists: list[models.Artist]
 
 
-class _Tracks(pydantic.BaseModel):
+class Tracks(pydantic.BaseModel):
     tracks: list[models.TrackWithSimpleArtist]
 
 
-class _Audiobooks(pydantic.BaseModel):
+class Audiobooks(pydantic.BaseModel):
     audiobooks: list[models.Audiobook]
 
 
-class _CategoryPaginator(pydantic.BaseModel):
+class CategoryPaginator(pydantic.BaseModel):
     paginator: models.Paginator[models.Category] = pydantic.Field(alias="categories")
 
 
-class _Chapters(pydantic.BaseModel):
+class Chapters(pydantic.BaseModel):
     chapters: list[models.Chapter]
 
 
-class _Episodes(pydantic.BaseModel):
+class Episodes(pydantic.BaseModel):
     episodes: list[models.Episode]
 
 
-class _AvailableGenreSeeds(pydantic.BaseModel):
+class AvailableGenreSeeds(pydantic.BaseModel):
     genres: list[str]
 
 
-class _AvailableMarkets(pydantic.BaseModel):
+class AvailableMarkets(pydantic.BaseModel):
     markets: list[str]
 
 
-class _SnapshotID(pydantic.BaseModel):
+class SnapshotID(pydantic.BaseModel):
     snapshot_id: str
 
 
-class _Shows(pydantic.BaseModel):
+class Shows(pydantic.BaseModel):
     shows: list[models.SimpleShow]
 
 
-class _AudioFeatures(pydantic.BaseModel):
+class AudioFeatures(pydantic.BaseModel):
     audio_features: list[models.AudioFeatures]
 
 
-class _ArtistsPaginator(pydantic.BaseModel):
+class ArtistsPaginator(pydantic.BaseModel):
     paginator: models.CursorPaginator[models.Artist] = pydantic.Field(alias="artists")
 
 
-class _Devices(pydantic.BaseModel):
+class Devices(pydantic.BaseModel):
     devices: list[models.Device]

@@ -181,9 +181,7 @@ class API:
         """
         albums = await self.get("albums", params={"ids": ",".join(album_ids), "market": market})
         assert albums is not None
-        return internals._Albums.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            albums
-        ).albums
+        return internals.Albums.model_validate_json(albums).albums
 
     @validator
     async def get_album_tracks(
@@ -322,9 +320,7 @@ class API:
             params={"limit": limit, "offset": offset},
         )
         assert albums is not None
-        return internals._SimpleAlbumPaginator.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            albums
-        ).paginator
+        return internals.SimpleAlbumPaginator.model_validate_json(albums).paginator
 
     @validator
     async def get_artist(self, artist_id: str) -> models.Artist:
@@ -360,9 +356,7 @@ class API:
         """
         artists = await self.get("artists", params={"ids": ",".join(artist_ids)})
         assert artists is not None
-        return internals._Artists.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            artists
-        ).artists
+        return internals.Artists.model_validate_json(artists).artists
 
     @validator
     async def get_artists_albums(
@@ -430,9 +424,7 @@ class API:
         """
         tracks = await self.get(f"artists/{artist_id}/top-tracks", params={"market": market})
         assert tracks is not None
-        return internals._Tracks.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            tracks
-        ).tracks
+        return internals.Tracks.model_validate_json(tracks).tracks
 
     @validator
     async def get_artists_related_artists(self, artist_id: str) -> list[models.Artist]:
@@ -451,9 +443,7 @@ class API:
         """
         artists = await self.get(f"artists/{artist_id}/related-artists")
         assert artists is not None
-        return internals._Artists.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            artists
-        ).artists
+        return internals.Artists.model_validate_json(artists).artists
 
     @validator
     async def get_audiobook(
@@ -505,9 +495,7 @@ class API:
             params={"ids": ",".join(audiobook_ids), "market": market},
         )
         assert audiobooks is not None
-        return internals._Audiobooks.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            audiobooks
-        ).audiobooks
+        return internals.Audiobooks.model_validate_json(audiobooks).audiobooks
 
     @validator
     async def get_audiobook_chapters(
@@ -684,9 +672,7 @@ class API:
             },
         )
         assert categories is not None
-        return internals._CategoryPaginator.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            categories
-        ).paginator
+        return internals.CategoryPaginator.model_validate_json(categories).paginator
 
     @typing.overload
     async def get_single_browse_category(
@@ -796,9 +782,7 @@ class API:
             "chapters", params={"ids": ",".join(chapter_ids), "market": market}
         )
         assert chapters is not None
-        return internals._Chapters.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            chapters
-        ).chapters
+        return internals.Chapters.model_validate_json(chapters).chapters
 
     @validator
     async def get_episode(
@@ -857,9 +841,7 @@ class API:
             "episodes", params={"ids": ",".join(episode_ids), "market": market}
         )
         assert episodes is not None
-        return internals._Episodes.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            episodes
-        ).episodes
+        return internals.Episodes.model_validate_json(episodes).episodes
 
     @validator
     async def get_users_saved_episodes(
@@ -960,9 +942,7 @@ class API:
         genres = await self.get("recommendations/available-genre-seeds")
         assert genres is not None
 
-        return internals._AvailableGenreSeeds.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            genres
-        ).genres
+        return internals.AvailableGenreSeeds.model_validate_json(genres).genres
 
     @validator
     async def get_available_markets(self) -> list[str]:
@@ -975,9 +955,7 @@ class API:
         """
         markets = await self.get("markets")
         assert markets is not None
-        return internals._AvailableMarkets.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            markets
-        ).markets
+        return internals.AvailableMarkets.model_validate_json(markets).markets
 
     @validator
     async def get_playback_state(
@@ -1037,7 +1015,7 @@ class API:
         """
         devices = await self.get("me/player/devices")
         assert devices is not None
-        return internals._Devices.model_validate_json(devices).devices  # pyright: ignore[reportPrivateUsage]
+        return internals.Devices.model_validate_json(devices).devices
 
     @validator
     async def get_currently_playing_track(
@@ -1566,7 +1544,7 @@ class API:
             },
         )
         assert snapshot_id_ is not None
-        return internals._SnapshotID.model_validate_json(snapshot_id_).snapshot_id  # pyright: ignore[reportPrivateUsage]
+        return internals.SnapshotID.model_validate_json(snapshot_id_).snapshot_id
 
     @validator
     async def add_items_to_playlist(
@@ -1600,7 +1578,7 @@ class API:
             },
         )
         assert snapshot_id is not None
-        return internals._SnapshotID.model_validate_json(snapshot_id).snapshot_id  # pyright: ignore[reportPrivateUsage]
+        return internals.SnapshotID.model_validate_json(snapshot_id).snapshot_id
 
     @validator
     async def remove_playlist_items(
@@ -1632,7 +1610,7 @@ class API:
             json={"tracks": tracks, "snapshot_id": snapshot_id},
         )
         assert snapshot_id_ is not None
-        return internals._SnapshotID.model_validate_json(snapshot_id_).snapshot_id  # pyright: ignore[reportPrivateUsage]
+        return internals.SnapshotID.model_validate_json(snapshot_id_).snapshot_id
 
     @validator
     async def get_current_users_playlists(
@@ -2047,9 +2025,7 @@ class API:
         """
         shows = await self.get("shows", params={"ids": ",".join(show_ids), "market": market})
         assert shows is not None
-        return internals._Shows.model_validate_json(  # pyright: ignore[reportPrivateUsage]
-            shows
-        ).shows
+        return internals.Shows.model_validate_json(shows).shows
 
     @validator
     async def get_show_episodes(
@@ -2206,7 +2182,7 @@ class API:
         """
         tracks = await self.get("tracks", params={"ids": ",".join(track_ids), "market": market})
         assert tracks is not None
-        return internals._Tracks.model_validate_json(tracks).tracks  # pyright: ignore[reportPrivateUsage]
+        return internals.Tracks.model_validate_json(tracks).tracks
 
     @validator
     async def get_users_saved_tracks(
@@ -2319,7 +2295,7 @@ class API:
         """
         features = await self.get("audio-features", params={"ids": ",".join(track_ids)})
         assert features is not None
-        return internals._AudioFeatures.model_validate_json(features).audio_features  # pyright: ignore[reportPrivateUsage]
+        return internals.AudioFeatures.model_validate_json(features).audio_features
 
     @validator
     async def get_tracks_audio_analysis(self, track_id: str) -> models.AudioAnalysis:
@@ -2721,7 +2697,7 @@ class API:
             params={"type": "artist", "after": after, "limit": limit},
         )
         assert followed is not None
-        return internals._ArtistsPaginator.model_validate_json(followed).paginator  # pyright: ignore[reportPrivateUsage]
+        return internals.ArtistsPaginator.model_validate_json(followed).paginator
 
     @validator
     async def follow_artists_or_users(

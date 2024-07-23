@@ -13,4 +13,5 @@ async def main():
     artist = await api.get_artist("0e86yPdC41PGRkLp2Q1Bph")
     print(artist.name)
 
+
 asyncio.run(main())
