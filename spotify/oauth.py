@@ -30,6 +30,7 @@ def build_auth_token(client_id: str, client_secret: str) -> str:
     token = token.decode("utf-8")
     return token
 
+
 # TODO: update docs, reduce code duplication
 class AuthorizationCodeFlow:
     """Implementation to help with the Authorization Code Flow by storing and refreshing access

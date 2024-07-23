@@ -3,4 +3,4 @@
       members:
         - get_recommendations
 ::: spotify.models.Recommendations
-::: spotify.models.RecommendationsSeed
+::: spotify.models.RecommendationSeed

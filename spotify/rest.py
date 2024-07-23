@@ -35,6 +35,10 @@ class API:
 
     @property
     def session(self) -> aiohttp.ClientSession:
+        """The [aiohttp `ClientSession`][aiohttp.ClientSession] to use for requests.
+        
+        Must be closed after all requests have been completed.
+        """
         if not self._session:
             self._session = aiohttp.ClientSession()
 
@@ -224,7 +228,8 @@ class API:
             A paginator who's items are a list of albums.
         """
         albums = await self.get(
-            "me/albums", params={"limit": limit, "offset": offset, "market": market}
+            "me/albums",
+            params={"limit": limit, "offset": offset, "market": market},
         )
         assert albums is not None
         return models.Paginator[models.SavedAlbum].model_validate_json(albums)
@@ -467,7 +472,8 @@ class API:
             The requested audiobooks.
         """
         audiobooks = await self.get(
-            "audiobooks", params={"ids": ",".join(audiobook_ids), "market": market}
+            "audiobooks",
+            params={"ids": ",".join(audiobook_ids), "market": market},
         )
         assert audiobooks is not None
         return internals._Audiobooks.model_validate_json(  # pyright: ignore[reportPrivateUsage]
@@ -843,7 +849,8 @@ class API:
             A paginator who's items are a list of episodes.
         """
         episodes = await self.get(
-            "me/episodes", params={"limit": limit, "offset": offset, "market": market}
+            "me/episodes",
+            params={"limit": limit, "offset": offset, "market": market},
         )
         assert episodes is not None
         return models.Paginator[models.SavedEpisode].model_validate_json(episodes)
@@ -945,7 +952,8 @@ class API:
             If there is no playback state.
         """
         player = await self.get(
-            "me/player", params={"market": market, "additional_types": "track,episode"}
+            "me/player",
+            params={"market": market, "additional_types": "track,episode"},
         )
         return models.Player.model_validate_json(player) if player is not None else None
 
@@ -1167,7 +1175,10 @@ class API:
         device_id : str, optional
             The ID of the device this command is targeting. Default: currently active device.
         """
-        await self.put("me/player/repeat", params={"state": state.value, "device_id": device_id})
+        await self.put(
+            "me/player/repeat",
+            params={"state": state.value, "device_id": device_id},
+        )
 
     async def set_playback_volume(
         self,
@@ -1207,7 +1218,10 @@ class API:
         device_id : str, optional
             The ID of the device this command is targeting. Default: currently active device.
         """
-        await self.put("me/player/shuffle", params={"state": state, "device_id": device_id})
+        await self.put(
+            "me/player/shuffle",
+            params={"state": state, "device_id": device_id},
+        )
 
     @typing.overload
     async def get_recently_played_tracks(
@@ -2135,7 +2149,8 @@ class API:
             A paginator who's items are a list of tracks.
         """
         tracks = await self.get(
-            "me/tracks", params={"limit": limit, "offset": offset, "market": market}
+            "me/tracks",
+            params={"limit": limit, "offset": offset, "market": market},
         )
         assert tracks is not None
         return models.Paginator[models.SavedTrack].model_validate_json(tracks)
@@ -2604,7 +2619,8 @@ class API:
             A paginator who's items are a list of artists.
         """
         followed = await self.get(
-            "me/following", params={"type": "artist", "after": after, "limit": limit}
+            "me/following",
+            params={"type": "artist", "after": after, "limit": limit},
         )
         assert followed is not None
         return internals._ArtistsPaginator.model_validate_json(followed).paginator  # pyright: ignore[reportPrivateUsage]
@@ -2657,7 +2673,8 @@ class API:
             A list of booleans dictating whether or not the current user has followed the corresponding users or artists.
         """
         follows = await self.get(
-            "me/following/contains", params={"ids": ",".join(ids), "type": type.value}
+            "me/following/contains",
+            params={"ids": ",".join(ids), "type": type.value},
         )
         assert follows is not None
         return json_.loads(follows)

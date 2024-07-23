@@ -16,5 +16,6 @@
         - add_custom_playlist_cover_image
 ::: spotify.models.SimplePlaylist
 ::: spotify.models.Playlist
+::: spotify.models.PlaylistTracks
 ::: spotify.models.PlaylistItem
 ::: spotify.models.Playlists

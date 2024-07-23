@@ -30,7 +30,9 @@ class AlbumType(enum.Enum):
     EP = "ep"
     """An EP.
     
-    NOTE: this value is not documented, but is returned frequently in the API so I have included it anyway.
+    !!! note
+        This value is not documented, but is returned frequently in the API so I have included it
+        anyway.
     """
 
 
@@ -73,6 +75,22 @@ class PlayingType(enum.Enum):
 
 
 @enum.unique
+class Reason(enum.Enum):
+    """Restriction reason."""
+
+    MARKET = "market"
+    """Content not available in given market."""
+    PRODUCT = "product"
+    """Content not available for user's subscription type."""
+    EXPLICIT = "explicit"
+    """User's account is set to not play explicit content."""
+    PAYMENT_REQUIRED = "payment_required"
+    """Payment is required to play the content item."""
+    UNKNOWN = "unknown"
+    """The restriction reason is unknown."""
+
+
+@enum.unique
 class RecommendationSeedType(enum.Enum):
     """The type of a recommendation seed."""
 
@@ -94,22 +112,6 @@ class ReleaseDatePrecision(enum.Enum):
     """Precise to the release month."""
     DAY = "day"
     """Precise to the release day."""
-
-
-@enum.unique
-class Reason(enum.Enum):
-    """Restriction reason."""
-
-    MARKET = "market"
-    """Content not available in given market."""
-    PRODUCT = "product"
-    """Content not available for user's subscription type."""
-    EXPLICIT = "explicit"
-    """User's account is set to not play explicit content."""
-    PAYMENT_REQUIRED = "payment_required"
-    """Payment is required to play the content item."""
-    UNKNOWN = "unknown"
-    """The restriction reason is unknown."""
 
 
 @enum.unique
@@ -137,10 +139,13 @@ class Scope(enum.Enum):
     USER_READ_CURRENTLY_PLAYING = "user-read-currently-playing"
     """Read access to a user's currently playing content."""
     APP_REMOTE_CONTROL = "app-remote-control"
-    """Remote control playback of Spotify. This scope is currently available to Spotify iOS and Android SDKs."""
+    """Remote control playback of Spotify. This scope is currently available to Spotify iOS and
+    Android SDKs.
+    """
     STREAMING = "streaming"
-    """Control playback of a Spotify track. This scope is currently available to the Web Playback SDK.
-    The user must have a Spotify Premium account."""
+    """Control playback of a Spotify track. This scope is currently available to the Web Playback
+    SDK. The user must have a Spotify Premium account.
+    """
     PLAYLIST_READ_PRIVATE = "playlist-read-private"
     """Read access to user's private playlists."""
     PLAYLIST_READ_COLLABORATIVE = "playlist-read-collaborative"
@@ -249,6 +254,8 @@ class TrackMode(enum.IntEnum):
     """Minor mode."""
     MAJOR = 1
     """Major mode."""
+    UNKNOWN = -1
+    """Mode is unknown."""
 
 
 @enum.unique
