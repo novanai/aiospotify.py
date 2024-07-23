@@ -7,7 +7,7 @@ import urllib.parse as parse
 
 import aiohttp
 
-from spotify import enums, utils
+from spotify import enums, errors, utils
 
 
 def build_auth_token(client_id: str, client_secret: str) -> str:
@@ -31,7 +31,6 @@ def build_auth_token(client_id: str, client_secret: str) -> str:
     return token
 
 
-# TODO: update docs, reduce code duplication
 class AuthorizationCodeFlow:
     """Implementation to help with the Authorization Code Flow by storing and refreshing access
     tokens.
@@ -92,18 +91,19 @@ class AuthorizationCodeFlow:
         client_id: str,
         client_secret: str | None = None,
     ) -> None:
-        self.access_token = access_token
-        self.token_type = token_type
-        self.scopes = scopes
-        self.expires_in = expires_in
-        self.refresh_token = refresh_token
+        self.access_token: str = access_token
+        self.token_type: str = token_type
+        self.expires_in: datetime.timedelta = expires_in
+        self.scopes: list[enums.Scope] = scopes
+        self.refresh_token: str = refresh_token
 
-        self.client_id = client_id
-        self.client_secret = client_secret
+        self.client_id: str = client_id
+        self.client_secret: str | None = client_secret
 
-        self.expires_at = datetime.datetime.now(datetime.timezone.utc) + expires_in
+        self.expires_at: datetime.datetime = (
+            datetime.datetime.now(datetime.timezone.utc) + expires_in
+        )
 
-    # TODO: these should be using MISSING not None
     @typing.overload
     @staticmethod
     def build_url(
@@ -226,7 +226,7 @@ class AuthorizationCodeFlow:
         """
         if client_secret and code_verifier:
             raise ValueError(
-                "Only one of client_secret and code_verifier is required, depending on "
+                "Only one of client_secret and code_verifier may be provided, depending on "
                 "whether or not you are implementing PKCE."
             )
 
@@ -249,20 +249,34 @@ class AuthorizationCodeFlow:
             headers=headers,
             data=data,
         ) as r:
-            r.raise_for_status()
+            if not r.ok:
+                raise errors.APIError(r.status, r.reason)
+
             data = await r.json()
 
-            return cls(
-                data["access_token"],
-                data["token_type"],
-                datetime.timedelta(seconds=data["expires_in"]),
-                [enums.Scope(scope) for scope in scopes.split(" ")]
-                if (scopes := data.get("scope"))
-                else [],
-                data["refresh_token"],
-                client_id=client_id,
-                client_secret=client_secret,
-            )
+            if client_secret:
+                return cls(
+                    access_token=data["access_token"],
+                    token_type=data["token_type"],
+                    expires_in=datetime.timedelta(seconds=data["expires_in"]),
+                    scopes=[enums.Scope(scope) for scope in scopes.split(" ")]
+                    if (scopes := data.get("scope"))
+                    else [],
+                    refresh_token=data["refresh_token"],
+                    client_id=client_id,
+                    client_secret=client_secret,
+                )
+            else:
+                return cls(
+                    access_token=data["access_token"],
+                    token_type=data["token_type"],
+                    expires_in=datetime.timedelta(seconds=data["expires_in"]),
+                    scopes=[enums.Scope(scope) for scope in scopes.split(" ")]
+                    if (scopes := data.get("scope"))
+                    else [],
+                    refresh_token=data["refresh_token"],
+                    client_id=client_id,
+                )
 
     async def validate_token(self) -> None:
         if datetime.datetime.now(datetime.timezone.utc) > self.expires_at:
@@ -288,7 +302,9 @@ class AuthorizationCodeFlow:
             headers=headers,
             data=data,
         ) as r:
-            r.raise_for_status()
+            if not r.ok:
+                raise errors.APIError(r.status, r.reason)
+
             data = await r.json()
 
             self.access_token = data["access_token"]
@@ -296,7 +312,7 @@ class AuthorizationCodeFlow:
             self.scopes = (
                 [enums.Scope(scope) for scope in scopes.split(" ")]
                 if (scopes := data.get("scope"))
-                else [],
+                else []
             )
             self.expires_in = datetime.timedelta(seconds=data["expires_in"])
             self.expires_at = datetime.datetime.now(datetime.timezone.utc) + self.expires_in
@@ -317,6 +333,10 @@ class ClientCredentialsFlow:
         How the access token may be used.
     expires_in : datetime.timedelta
         The time period for which the access token is valid.
+    client_id : str
+        The client's ID.
+    client_secret : str
+        The client's secret.
     """
 
     def __init__(
@@ -328,14 +348,16 @@ class ClientCredentialsFlow:
         client_id: str,
         client_secret: str,
     ) -> None:
-        self.access_token = access_token
-        self.token_type = token_type
-        self.expires_in = expires_in
+        self.access_token: str = access_token
+        self.token_type: str = token_type
+        self.expires_in: datetime.timedelta = expires_in
 
-        self.client_id = client_id
-        self.client_secret = client_secret
+        self.client_id: str = client_id
+        self.client_secret: str = client_secret
 
-        self.expires_at = datetime.datetime.now(datetime.timezone.utc) + expires_in
+        self.expires_at: datetime.datetime = (
+            datetime.datetime.now(datetime.timezone.utc) + expires_in
+        )
 
     @classmethod
     async def build_from_access_token(cls, client_id: str, client_secret: str) -> typing.Self:
@@ -348,6 +370,32 @@ class ClientCredentialsFlow:
         client_secret : str
             The client's secret.
         """
+        data = await cls.request_access_token(client_id, client_secret)
+
+        return cls(
+            access_token=data["access_token"],
+            token_type=data["token_type"],
+            expires_in=datetime.timedelta(seconds=data["expires_in"]),
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+
+    async def validate_token(self) -> None:
+        if datetime.datetime.now(datetime.timezone.utc) > self.expires_at:
+            await self.refresh_access_token()
+
+    async def refresh_access_token(self):
+        data = await self.request_access_token(self.client_id, self.client_secret)
+
+        self.access_token = data["access_token"]
+        self.token_type = data["token_type"]
+        self.expires_in = datetime.timedelta(seconds=data["expires_in"])
+        self.expires_at = datetime.datetime.now(datetime.timezone.utc) + self.expires_in
+
+    @classmethod
+    async def request_access_token(
+        cls, client_id: str, client_secret: str
+    ) -> dict[str, typing.Any]:
         async with aiohttp.request(
             "POST",
             "https://accounts.spotify.com/api/token",
@@ -359,37 +407,7 @@ class ClientCredentialsFlow:
                 "grant_type": "client_credentials",
             },
         ) as r:
-            r.raise_for_status()
-            data = await r.json()
+            if not r.ok:
+                raise errors.APIError(r.status, r.reason)
 
-            return cls(
-                data["access_token"],
-                data["token_type"],
-                datetime.timedelta(seconds=data["expires_in"]),
-                client_id=client_id,
-                client_secret=client_secret,
-            )
-
-    async def validate_token(self) -> None:
-        if datetime.datetime.now(datetime.timezone.utc) > self.expires_at:
-            await self.refresh_access_token()
-
-    async def refresh_access_token(self):
-        async with aiohttp.request(
-            "POST",
-            "https://accounts.spotify.com/api/token",
-            headers={
-                "Authorization": f"Basic {build_auth_token(self.client_id, self.client_secret)}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={
-                "grant_type": "client_credentials",
-            },
-        ) as r:
-            r.raise_for_status()
-            data = await r.json()
-
-            self.access_token = data["access_token"]
-            self.token_type = data["token_type"]
-            self.expires_in = datetime.timedelta(seconds=data["expires_in"])
-            self.expires_at = datetime.datetime.now(datetime.timezone.utc) + self.expires_in
+            return await r.json()
