@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import typing
-from spotify import enums, utils
-import pydantic
 import datetime
+import typing
 
+import pydantic
+
+from spotify import enums, utils
 
 ArtistT = typing.TypeVar("ArtistT", bound="SimpleArtist")
 T = typing.TypeVar("T")
@@ -25,11 +26,13 @@ class BaseModel(pydantic.BaseModel):
 
         return utils.datetime_from_timestamp(v)
 
+
 class DurationMS(pydantic.BaseModel):
     @pydantic.field_validator("duration", mode="before", check_fields=False)
     @classmethod
     def duration_validator(cls, v: int) -> float:
         return v / 1000
+
 
 class SavedAlbum(BaseModel):
     """Information about an album saved to a user's 'Your Music' library."""
@@ -1114,6 +1117,7 @@ class ResumePoint(BaseModel):
     @classmethod
     def resume_position_validator(cls, v: int) -> float:
         return v / 1000
+
 
 class SavedShow(BaseModel):
     """Information about a show saved to a user's 'Your Music' library."""

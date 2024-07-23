@@ -14,3 +14,7 @@ class APIError(Exception):
 
     def __str__(self) -> str:
         return f"Status: {self.status}. Message: {self.message}"
+
+
+class InvalidPayloadError(Exception):
+    """Error raised when spotify sends an invalid JSON payload that cannot be decoded."""

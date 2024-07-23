@@ -1,6 +1,7 @@
 # Modified from https://github.com/hikari-py/hikari/blob/master/hikari/undefined.py
 
 from __future__ import annotations
+
 import typing
 
 __all__: typing.Sequence[str] = (

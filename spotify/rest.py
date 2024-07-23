@@ -1,19 +1,35 @@
 from __future__ import annotations
 
-
-import aiohttp
-import typing
-import json as json_
 import base64
 import datetime
+import json as json_
+import typing
+
+import aiohttp
+import pydantic
 
 import spotify
-from spotify import enums, errors, models, utils, internals
-
-from spotify.types import MissingOr, MISSING
+from spotify import enums, errors, internals, models, utils
+from spotify.types import MISSING, MissingOr
 
 if typing.TYPE_CHECKING:
     from spotify import oauth
+
+P = typing.ParamSpec("P")
+T = typing.TypeVar("T")
+
+
+def validator(
+    func: typing.Callable[P, typing.Awaitable[T]],
+) -> typing.Callable[P, typing.Awaitable[T]]:
+    async def inner(*args: P.args, **kwargs: P.kwargs) -> T:
+        try:
+            result = await func(*args, **kwargs)
+        except pydantic.ValidationError as e:
+            raise errors.InvalidPayloadError("invalid JSON payload received") from e
+        return result
+
+    return inner
 
 
 class API:
@@ -36,7 +52,7 @@ class API:
     @property
     def session(self) -> aiohttp.ClientSession:
         """The [aiohttp `ClientSession`][aiohttp.ClientSession] to use for requests.
-        
+
         Must be closed after all requests have been completed.
         """
         if not self._session:
@@ -123,6 +139,7 @@ class API:
     ) -> bytes | None:
         return await self.request("DELETE", url, params=params, json=json, data=data)
 
+    @validator
     async def get_album(self, album_id: str, *, market: MissingOr[str] = MISSING) -> models.Album:
         """Get Spotify catalog information for a single album.
 
@@ -143,6 +160,7 @@ class API:
         assert album is not None
         return models.Album.model_validate_json(album)
 
+    @validator
     async def get_several_albums(
         self, album_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> list[models.Album]:
@@ -167,6 +185,7 @@ class API:
             albums
         ).albums
 
+    @validator
     async def get_album_tracks(
         self,
         album_id: str,
@@ -201,6 +220,7 @@ class API:
         assert tracks is not None
         return models.Paginator[models.SimpleTrack].model_validate_json(tracks)
 
+    @validator
     async def get_users_saved_albums(
         self,
         *,
@@ -232,6 +252,7 @@ class API:
         assert albums is not None
         return models.Paginator[models.SavedAlbum].model_validate_json(albums)
 
+    @validator
     async def save_albums_for_current_user(
         self,
         album_ids: list[str],
@@ -245,6 +266,7 @@ class API:
         """
         await self.put("me/albums", json={"ids": album_ids})
 
+    @validator
     async def remove_users_saved_albums(self, album_ids: list[str]) -> None:
         """Remove one or more albums from the current user's 'Your Music' library.
 
@@ -255,6 +277,7 @@ class API:
         """
         await self.delete("me/albums", json={"ids": album_ids})
 
+    @validator
     async def check_users_saved_albums(self, album_ids: list[str]) -> list[bool]:
         """Check if one or more albums is already saved in the current user's 'Your Music' library.
 
@@ -272,6 +295,7 @@ class API:
         assert albums is not None
         return json_.loads(albums)
 
+    @validator
     async def get_new_releases(
         self,
         *,
@@ -302,6 +326,7 @@ class API:
             albums
         ).paginator
 
+    @validator
     async def get_artist(self, artist_id: str) -> models.Artist:
         """Get Spotify catalog information for a single artist.
 
@@ -319,6 +344,7 @@ class API:
         assert artist is not None
         return models.Artist.model_validate_json(artist)
 
+    @validator
     async def get_several_artists(self, artist_ids: list[str]) -> list[models.Artist]:
         """Get Spotify catalog information for several artists.
 
@@ -338,6 +364,7 @@ class API:
             artists
         ).artists
 
+    @validator
     async def get_artists_albums(
         self,
         artist_id: str,
@@ -382,6 +409,7 @@ class API:
         assert albums is not None
         return models.Paginator[models.ArtistAlbum].model_validate_json(albums)
 
+    @validator
     async def get_artists_top_tracks(
         self, artist_id: str, *, market: MissingOr[str] = MISSING
     ) -> list[models.TrackWithSimpleArtist]:
@@ -406,6 +434,7 @@ class API:
             tracks
         ).tracks
 
+    @validator
     async def get_artists_related_artists(self, artist_id: str) -> list[models.Artist]:
         """Get Spotify catalog information about artists similar to a given artist.
         Similarity is based on analysis of the Spotify community's listening history.
@@ -426,6 +455,7 @@ class API:
             artists
         ).artists
 
+    @validator
     async def get_audiobook(
         self, audiobook_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.Audiobook:
@@ -448,6 +478,7 @@ class API:
         assert audiobook is not None
         return models.Audiobook.model_validate_json(audiobook)
 
+    @validator
     async def get_several_audiobooks(
         self,
         audiobook_ids: list[str],
@@ -478,6 +509,7 @@ class API:
             audiobooks
         ).audiobooks
 
+    @validator
     async def get_audiobook_chapters(
         self,
         audiobook_id: str,
@@ -512,6 +544,7 @@ class API:
         assert chapters is not None
         return models.Paginator[models.SimpleChapter].model_validate_json(chapters)
 
+    @validator
     async def get_users_saved_audiobooks(
         self,
         *,
@@ -536,6 +569,7 @@ class API:
         assert audiobooks is not None
         return models.Paginator[models.SimpleAudiobook].model_validate_json(audiobooks)
 
+    @validator
     async def save_audiobooks_for_user(
         self,
         audiobook_ids: list[str],
@@ -549,6 +583,7 @@ class API:
         """
         await self.put("me/audiobooks", params={"ids": ",".join(audiobook_ids)})
 
+    @validator
     async def remove_users_saved_audiobooks(
         self,
         audiobook_ids: list[str],
@@ -562,6 +597,7 @@ class API:
         """
         await self.delete("me/audiobooks", params={"ids": ",".join(audiobook_ids)})
 
+    @validator
     async def check_users_saved_audiobooks(self, audiobook_ids: list[str]) -> list[bool]:
         """Check if one or more audiobooks are already saved in the current user's 'Your Music' library.
 
@@ -599,6 +635,7 @@ class API:
         offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.Category]: ...
 
+    @validator
     async def get_several_browse_categories(
         self,
         *,
@@ -666,6 +703,7 @@ class API:
         locale: str,
     ) -> models.Category: ...
 
+    @validator
     async def get_single_browse_category(
         self,
         category_id: str,
@@ -709,6 +747,7 @@ class API:
         assert category is not None
         return models.Category.model_validate_json(category)
 
+    @validator
     async def get_chapter(
         self, chapter_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.Chapter:
@@ -731,6 +770,7 @@ class API:
         assert chapter is not None
         return models.Chapter.model_validate_json(chapter)
 
+    @validator
     async def get_several_chapters(
         self,
         chapter_ids: list[str],
@@ -760,6 +800,7 @@ class API:
             chapters
         ).chapters
 
+    @validator
     async def get_episode(
         self, episode_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.Episode:
@@ -787,6 +828,7 @@ class API:
 
     # NOTE: market is required on this endpoint when not using a user token
     # otherwise a list of null objects is returned - RAISING VALIDATION ERROR
+    @validator
     async def get_several_episodes(
         self,
         episode_ids: list[str],
@@ -819,6 +861,7 @@ class API:
             episodes
         ).episodes
 
+    @validator
     async def get_users_saved_episodes(
         self,
         *,
@@ -853,6 +896,7 @@ class API:
         assert episodes is not None
         return models.Paginator[models.SavedEpisode].model_validate_json(episodes)
 
+    @validator
     async def save_episodes_for_current_user(
         self,
         episode_ids: list[str],
@@ -869,6 +913,7 @@ class API:
         """
         await self.put("me/episodes", params={"ids": ",".join(episode_ids)})
 
+    @validator
     async def remove_users_saved_episodes(self, episode_ids: list[str]) -> None:
         """Remove one or more episodes from the current user's 'Your Music' library.
 
@@ -882,6 +927,7 @@ class API:
         """
         await self.delete("me/episodes", params={"ids": ",".join(episode_ids)})
 
+    @validator
     async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
         """Check if one or more episodes are already saved in the current user's 'Your Music' library.
 
@@ -902,6 +948,7 @@ class API:
         assert episodes is not None
         return json_.loads(episodes)
 
+    @validator
     async def get_available_genre_seeds(self) -> list[str]:
         """Retrieve a list of available genres seed parameter values for recommendations.
 
@@ -917,6 +964,7 @@ class API:
             genres
         ).genres
 
+    @validator
     async def get_available_markets(self) -> list[str]:
         """Get the list of markets where Spotify is available.
 
@@ -931,6 +979,7 @@ class API:
             markets
         ).markets
 
+    @validator
     async def get_playback_state(
         self, *, market: MissingOr[str] = MISSING
     ) -> models.Player | None:
@@ -955,6 +1004,7 @@ class API:
         )
         return models.Player.model_validate_json(player) if player is not None else None
 
+    @validator
     async def transfer_playback(
         self,
         device_id: str,
@@ -975,6 +1025,7 @@ class API:
         """
         await self.put("me/player", json={"device_ids": [device_id], "play": play})
 
+    @validator
     async def get_available_devices(self) -> list[models.Device]:
         """Get information about a user's available Spotify Connect devices.
         Some device models are not supported and will not be listed in the response.
@@ -988,6 +1039,7 @@ class API:
         assert devices is not None
         return internals._Devices.model_validate_json(devices).devices  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def get_currently_playing_track(
         self, *, market: MissingOr[str] = MISSING
     ) -> models.PlayerTrack | None:
@@ -1031,6 +1083,7 @@ class API:
         position: MissingOr[datetime.timedelta] = MISSING,
     ) -> None: ...
 
+    @validator
     async def start_or_resume_playback(
         self,
         *,
@@ -1090,6 +1143,7 @@ class API:
             },
         )
 
+    @validator
     async def pause_playback(self, *, device_id: MissingOr[str] = MISSING) -> None:
         """Pause playback on the user's account.
 
@@ -1103,6 +1157,7 @@ class API:
         """
         await self.put("me/player/pause", params={"device_id": device_id})
 
+    @validator
     async def skip_to_next(self, *, device_id: MissingOr[str] = MISSING) -> None:
         """Skip to the next item in the user's queue.
 
@@ -1116,6 +1171,7 @@ class API:
         """
         await self.post("me/player/next", params={"device_id": device_id})
 
+    @validator
     async def skip_to_previous(self, *, device_id: MissingOr[str] = MISSING) -> None:
         """Skip to the previous item in the user's queue.
 
@@ -1129,6 +1185,7 @@ class API:
         """
         await self.post("me/player/previous", params={"device_id": device_id})
 
+    @validator
     async def seek_to_position(
         self,
         position: datetime.timedelta,
@@ -1155,6 +1212,7 @@ class API:
             },
         )
 
+    @validator
     async def set_repeat_mode(
         self,
         state: enums.RepeatState,
@@ -1178,6 +1236,7 @@ class API:
             params={"state": state.value, "device_id": device_id},
         )
 
+    @validator
     async def set_playback_volume(
         self,
         volume_percent: int,
@@ -1201,6 +1260,7 @@ class API:
             params={"volume_percent": volume_percent, "device_id": device_id},
         )
 
+    @validator
     async def set_playback_shuffle(
         self, state: bool, *, device_id: MissingOr[str] = MISSING
     ) -> None:
@@ -1237,6 +1297,7 @@ class API:
         before: MissingOr[datetime.datetime] = MISSING,
     ) -> models.CursorPaginator[models.PlayHistory]: ...
 
+    @validator
     async def get_recently_played_tracks(
         self,
         *,
@@ -1275,6 +1336,7 @@ class API:
         assert played is not None
         return models.CursorPaginator[models.PlayHistory].model_validate_json(played)
 
+    @validator
     async def get_users_queue(self) -> models.Queue:
         """Get the items in the user's queue.
 
@@ -1287,6 +1349,7 @@ class API:
         assert queue is not None
         return models.Queue.model_validate_json(queue)
 
+    @validator
     async def add_item_to_playback_queue(
         self,
         uri: str,
@@ -1308,6 +1371,7 @@ class API:
         await self.post("me/player/queue", params={"uri": uri, "device_id": device_id})
 
     # TODO: create a helper object for the query field
+    @validator
     async def get_playlist(
         self,
         playlist_id: str,
@@ -1354,6 +1418,7 @@ class API:
         assert playlist is not None
         return models.Playlist.model_validate_json(playlist)
 
+    @validator
     async def change_playlist_details(
         self,
         playlist_id: str,
@@ -1396,6 +1461,7 @@ class API:
         )
 
     # TODO: create a helper object for the query field
+    @validator
     async def get_playlist_items(
         self,
         playlist_id: str,
@@ -1445,6 +1511,7 @@ class API:
         assert items is not None
         return models.Paginator[models.PlaylistItem].model_validate_json(items)
 
+    @validator
     async def update_playlist_items(
         self,
         playlist_id: str,
@@ -1501,6 +1568,7 @@ class API:
         assert snapshot_id_ is not None
         return internals._SnapshotID.model_validate_json(snapshot_id_).snapshot_id  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def add_items_to_playlist(
         self,
         playlist_id: str,
@@ -1534,6 +1602,7 @@ class API:
         assert snapshot_id is not None
         return internals._SnapshotID.model_validate_json(snapshot_id).snapshot_id  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def remove_playlist_items(
         self,
         playlist_id: str,
@@ -1565,6 +1634,7 @@ class API:
         assert snapshot_id_ is not None
         return internals._SnapshotID.model_validate_json(snapshot_id_).snapshot_id  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def get_current_users_playlists(
         self,
         *,
@@ -1595,6 +1665,7 @@ class API:
         assert playlists is not None
         return models.Paginator[models.SimplePlaylist].model_validate_json(playlists)
 
+    @validator
     async def get_users_playlists(
         self,
         user_id: str,
@@ -1628,6 +1699,7 @@ class API:
         assert playlists is not None
         return models.Paginator[models.SimplePlaylist].model_validate_json(playlists)
 
+    @validator
     async def create_playlist(
         self,
         user_id: str,
@@ -1679,6 +1751,7 @@ class API:
         assert playlist is not None
         return models.Playlist.model_validate_json(playlist)
 
+    @validator
     async def get_featured_playlists(
         self,
         *,
@@ -1713,6 +1786,7 @@ class API:
         assert playlists is not None
         return models.Playlists.model_validate_json(playlists)
 
+    @validator
     async def get_categorys_playlists(
         self,
         category_id: str,
@@ -1746,6 +1820,7 @@ class API:
         assert playlists is not None
         return models.Playlists.model_validate_json(playlists)
 
+    @validator
     async def get_playlist_cover_image(
         self,
         playlist_id: str,
@@ -1767,6 +1842,7 @@ class API:
         img_list: list[dict[str, str | int]] = json_.loads(images)
         return [models.Image(**img) for img in img_list]  # pyright: ignore[reportArgumentType]
 
+    @validator
     async def add_custom_playlist_cover_image(
         self,
         playlist_id: str,
@@ -1789,6 +1865,7 @@ class API:
         )
 
     # TODO: create builder class for this
+    @validator
     async def search_for_item(
         self,
         *,
@@ -1928,6 +2005,7 @@ class API:
         assert results is not None
         return models.SearchResult.model_validate_json(results)
 
+    @validator
     async def get_show(self, show_id: str, *, market: MissingOr[str] = MISSING) -> models.Show:
         """Get Spotify catalog information for a single show.
 
@@ -1948,6 +2026,7 @@ class API:
         assert show is not None
         return models.Show.model_validate_json(show)
 
+    @validator
     async def get_several_shows(
         self, show_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> list[models.SimpleShow]:
@@ -1972,6 +2051,7 @@ class API:
             shows
         ).shows
 
+    @validator
     async def get_show_episodes(
         self,
         show_id: str,
@@ -2006,6 +2086,7 @@ class API:
         assert episodes is not None
         return models.Paginator[models.SimpleEpisode].model_validate_json(episodes)
 
+    @validator
     async def get_users_saved_shows(
         self,
         *,
@@ -2033,6 +2114,7 @@ class API:
         assert shows is not None
         return models.Paginator[models.SavedShow].model_validate_json(shows)
 
+    @validator
     async def save_shows_for_current_user(
         self,
         show_ids: list[str],
@@ -2046,6 +2128,7 @@ class API:
         """
         await self.put("me/shows", params={"ids": ",".join(show_ids)})
 
+    @validator
     async def remove_users_saved_shows(
         self, show_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> None:
@@ -2061,6 +2144,7 @@ class API:
         """
         await self.delete("me/shows", params={"ids": ",".join(show_ids), "market": market})
 
+    @validator
     async def check_users_saved_shows(self, show_ids: list[str]) -> list[bool]:
         """Check if one or more shows is already saved in the current user's 'Your Music' library.
 
@@ -2078,6 +2162,7 @@ class API:
         assert shows is not None
         return json_.loads(shows)
 
+    @validator
     async def get_track(
         self, track_id: str, *, market: MissingOr[str] = MISSING
     ) -> models.TrackWithSimpleArtist:
@@ -2100,6 +2185,7 @@ class API:
         assert track is not None
         return models.TrackWithSimpleArtist.model_validate_json(track)
 
+    @validator
     async def get_several_tracks(
         self, track_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> list[models.TrackWithSimpleArtist]:
@@ -2122,6 +2208,7 @@ class API:
         assert tracks is not None
         return internals._Tracks.model_validate_json(tracks).tracks  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def get_users_saved_tracks(
         self,
         *,
@@ -2153,6 +2240,7 @@ class API:
         assert tracks is not None
         return models.Paginator[models.SavedTrack].model_validate_json(tracks)
 
+    @validator
     async def save_tracks_for_current_user(
         self,
         track_ids: list[str],
@@ -2166,6 +2254,7 @@ class API:
         """
         await self.put("me/tracks", params={"ids": ",".join(track_ids)})
 
+    @validator
     async def remove_users_saved_tracks(self, track_ids: list[str]) -> None:
         """Remove one or more tracks from the current user's 'Your Music' library.
 
@@ -2176,6 +2265,7 @@ class API:
         """
         await self.delete("me/tracks", params={"ids": ",".join(track_ids)})
 
+    @validator
     async def check_users_saved_tracks(self, track_ids: list[str]) -> list[bool]:
         """Check if one or more tracks is already saved in the current user's 'Your Music' library.
 
@@ -2193,6 +2283,7 @@ class API:
         assert tracks is not None
         return json_.loads(tracks)
 
+    @validator
     async def get_tracks_audio_features(self, track_id: str) -> models.AudioFeatures:
         """Get audio feature information for a single track.
 
@@ -2210,6 +2301,7 @@ class API:
         assert features is not None
         return models.AudioFeatures.model_validate_json(features)
 
+    @validator
     async def get_several_tracks_audio_features(
         self, track_ids: list[str]
     ) -> list[models.AudioFeatures]:
@@ -2229,6 +2321,7 @@ class API:
         assert features is not None
         return internals._AudioFeatures.model_validate_json(features).audio_features  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def get_tracks_audio_analysis(self, track_id: str) -> models.AudioAnalysis:
         """Get a low-level audio analysis for a track in the Spotify catalog.
         The audio analysis describes the track's structure and musical content,
@@ -2248,6 +2341,7 @@ class API:
         assert analysis is not None
         return models.AudioAnalysis.model_validate_json(analysis)
 
+    @validator
     async def get_recommendations(
         self,
         seed_artists: MissingOr[list[str]] = MISSING,
@@ -2473,6 +2567,7 @@ class API:
         assert recommendations is not None
         return models.Recommendations.model_validate_json(recommendations)
 
+    @validator
     async def get_current_users_profile(self) -> models.OwnUser:
         """Get detailed profile information about the current user.
 
@@ -2505,6 +2600,7 @@ class API:
         time_range: MissingOr[enums.TimeRange] = MISSING,
     ) -> models.Paginator[models.TrackWithSimpleArtist]: ...
 
+    @validator
     async def get_users_top_items(
         self,
         type: enums.TopItemType,
@@ -2548,6 +2644,7 @@ class API:
             assert type is enums.TopItemType.TRACKS
             return models.Paginator[models.TrackWithSimpleArtist].model_validate_json(items)
 
+    @validator
     async def get_users_profile(
         self,
         user_id: str,
@@ -2568,6 +2665,7 @@ class API:
         assert user is not None
         return models.User.model_validate_json(user)
 
+    @validator
     async def follow_playlist(
         self,
         playlist_id: str,
@@ -2584,6 +2682,7 @@ class API:
         """
         await self.put(f"playlists/{playlist_id}/followers", json={"public": public})
 
+    @validator
     async def unfollow_playlist(
         self,
         playlist_id: str,
@@ -2597,6 +2696,7 @@ class API:
         """
         await self.delete(f"playlists/{playlist_id}/followers")
 
+    @validator
     async def get_followed_artists(
         self,
         after: MissingOr[str] = MISSING,
@@ -2623,6 +2723,7 @@ class API:
         assert followed is not None
         return internals._ArtistsPaginator.model_validate_json(followed).paginator  # pyright: ignore[reportPrivateUsage]
 
+    @validator
     async def follow_artists_or_users(
         self,
         ids: list[str],
@@ -2639,6 +2740,7 @@ class API:
         """
         await self.put("me/following", params={"ids": ",".join(ids), "type": type.value})
 
+    @validator
     async def unfollow_artists_or_users(self, ids: list[str], type: enums.UserType) -> None:
         """Remove the current user as a follower of one or more artists or other Spotify users.
 
@@ -2651,6 +2753,7 @@ class API:
         """
         await self.delete("me/following", params={"ids": ",".join(ids), "type": type.value})
 
+    @validator
     async def check_if_user_follows_artists_or_users(
         self,
         ids: list[str],
@@ -2677,6 +2780,7 @@ class API:
         assert follows is not None
         return json_.loads(follows)
 
+    @validator
     async def check_if_current_user_follows_playlist(
         self,
         playlist_id: str,

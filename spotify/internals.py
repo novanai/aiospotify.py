@@ -1,25 +1,27 @@
 from __future__ import annotations
 
+import typing
+
 import pydantic
+
 from spotify import models
 
-# NOTE: check if it's necessary to import all of these
+# TODO: check if it's necessary to import all of these
 from spotify.models import (
-    ExternalURLs,
-    Image,
-    Restrictions,
-    SimpleArtist,
-    Paginator,
-    SimpleTrack,
+    Author,
     Copyright,
     ExternalIDs,
-    Author,
+    ExternalURLs,
+    Image,
     Narrator,
-    SimpleChapter,
+    Paginator,
+    Restrictions,
     ResumePoint,
+    SimpleArtist,
+    SimpleChapter,
     SimpleShow,
+    SimpleTrack,
 )
-import typing
 
 
 class _Albums(pydantic.BaseModel):
