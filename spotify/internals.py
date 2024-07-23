@@ -4,25 +4,6 @@ import pydantic
 
 from spotify import models
 
-# TODO: check if it's necessary to import all of these
-from spotify.models import (
-    Author,
-    Copyright,
-    ExternalIDs,
-    ExternalURLs,
-    Image,
-    Narrator,
-    Paginator,
-    Restrictions,
-    ResumePoint,
-    SimpleArtist,
-    SimpleChapter,
-    SimpleShow,
-    SimpleTrack,
-)
-
-# TODO: test all endpoints which use these models
-
 
 class Albums(pydantic.BaseModel):
     albums: list[models.Album]
