@@ -742,9 +742,10 @@ class SimpleChapter(BaseModel, DurationMS):
     is known.
     """
     resume_point: ResumePoint | None
-    """The user's most recent position in the chapter. Set if the supplied access token is a user
-    token and has the scope
-    [`USER_READ_PLAYBACK_POSITION`][spotify.enums.Scope.USER_READ_PLAYBACK_POSITION].
+    """The user's most recent position in the chapter.
+    
+    !!! scopes "Required Authorization Scope"
+        [`USER_READ_PLAYBACK_POSITION`][spotify.enums.Scope.USER_READ_PLAYBACK_POSITION].
     """
     uri: str
     """The Spotify URI for the chapter."""
@@ -820,9 +821,10 @@ class SimpleEpisode(BaseModel, DurationMS):
     is known.
     """
     resume_point: ResumePoint | None = None
-    """The user's most recent position in the episode. Set if the supplied access token is a user
-    token and has the scope
-    [`USER_READ_PLAYBACK_POSITION`][spotify.enums.Scope.USER_READ_PLAYBACK_POSITION].
+    """The user's most recent position in the episode.
+
+    !!! scopes "Required Authorization Scope"
+        [`USER_READ_PLAYBACK_POSITION`][spotify.enums.Scope.USER_READ_PLAYBACK_POSITION]
     """
     uri: str
     """The Spotify URI for the episode."""

@@ -1,0 +1,35 @@
+:root {
+    --md-admonition-icon--scopes: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 17a2 2 0 0 0 2-2 2 2 0 0 0-2-2 2 2 0 0 0-2 2 2 2 0 0 0 2 2m6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5 5 5 0 0 1 5 5v2h1m-6-5a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3Z"/></svg>')
+}
+.md-typeset .admonition.scopes,
+.md-typeset details.scopes {
+    border-color: var(--md-code-hl-function-color);
+}
+.md-typeset .scopes > .admonition-title,
+.md-typeset .scopes > summary {
+    background-color: rgba(146, 43, 155, 0.15);
+}
+.md-typeset .scopes > .admonition-title::before,
+.md-typeset .scopes > summary::before {
+    background-color: var(--md-code-hl-function-color);
+    -webkit-mask-image: var(--md-admonition-icon--scopes);
+    mask-image: var(--md-admonition-icon--scopes);
+}
+
+:root {
+    --md-admonition-icon--premium: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M0 112.5v309.8c0 18 10.1 35 27 41.3 87 32.5 174 10.3 261-11.9 79.8-20.3 159.6-40.7 239.3-18.9 23 6.3 48.7-9.5 48.7-33.4V89.5c0-18-10.1-35-27-41.3-87-32.3-174-10.1-261 12.1-79.8 20.3-159.6 40.6-239.3 18.8C25.6 72.8 0 88.6 0 112.5zM288 352c-44.2 0-80-43-80-96s35.8-96 80-96 80 43 80 96-35.8 96-80 96zm-224 0c35.3 0 64 28.7 64 64H64v-64zm64-208c0 35.3-28.7 64-64 64v-64h64zm384 160v64h-64c0-35.3 28.7-64 64-64zM448 96h64v64c-35.3 0-64-28.7-64-64z"/></svg>')
+}
+.md-typeset .admonition.premium,
+.md-typeset details.premium {
+    border-color: rgb(43, 155, 70);
+}
+.md-typeset .premium > .admonition-title,
+.md-typeset .premium > summary {
+    background-color: rgba(43, 155, 70, 0.1);
+}
+.md-typeset .premium > .admonition-title::before,
+.md-typeset .premium > summary::before {
+    background-color: rgb(43, 155, 70);
+    -webkit-mask-image: var(--md-admonition-icon--premium);
+    mask-image: var(--md-admonition-icon--premium);
+}

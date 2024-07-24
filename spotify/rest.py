@@ -34,6 +34,7 @@ def validator(
     return inner
 
 
+# TODO: rename file to api.py
 class API:
     """Implementation to make API calls with.
 
@@ -230,6 +231,9 @@ class API:
     ) -> models.Paginator[models.SavedAlbum]:
         """Get a list of the albums saved in the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
+
         Parameters
         ----------
         limit : int, default: 20
@@ -259,6 +263,9 @@ class API:
     ) -> None:
         """Save one or more albums to the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         album_ids : list[str]
@@ -270,6 +277,9 @@ class API:
     async def remove_users_saved_albums(self, album_ids: list[str]) -> None:
         """Remove one or more albums from the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         album_ids : list[str]
@@ -280,6 +290,9 @@ class API:
     @validator
     async def check_users_saved_albums(self, album_ids: list[str]) -> list[bool]:
         """Check if one or more albums is already saved in the current user's 'Your Music' library.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
 
         Parameters
         ----------
@@ -543,6 +556,9 @@ class API:
     ) -> models.Paginator[models.SimpleAudiobook]:
         """Get a list of the audiobooks saved in the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
+
         Parameters
         ----------
         limit : int, default: 20
@@ -566,6 +582,9 @@ class API:
     ) -> None:
         """Save one or more audiobooks to the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         audiobook_ids : list[str]
@@ -580,6 +599,9 @@ class API:
     ) -> None:
         """Remove one or more audiobooks from the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         audiobook_ids : list[str]
@@ -590,6 +612,9 @@ class API:
     @validator
     async def check_users_saved_audiobooks(self, audiobook_ids: list[str]) -> list[bool]:
         """Check if one or more audiobooks are already saved in the current user's 'Your Music' library.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
 
         Parameters
         ----------
@@ -853,6 +878,9 @@ class API:
     ) -> models.Paginator[models.SavedEpisode]:
         """Get a list of the episodes saved in the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
+
         !!! warning
             This API endpoint is in **beta** and could break without warning.
 
@@ -885,6 +913,9 @@ class API:
     ) -> None:
         """Save one or more episodes to the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scopes"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         !!! warning
             This API endpoint is in **beta** and could break without warning.
 
@@ -899,6 +930,9 @@ class API:
     async def remove_users_saved_episodes(self, episode_ids: list[str]) -> None:
         """Remove one or more episodes from the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         !!! warning
             This API endpoint is in **beta** and could break without warning.
 
@@ -912,6 +946,9 @@ class API:
     @validator
     async def check_users_saved_episodes(self, episode_ids: list[str]) -> list[bool]:
         """Check if one or more episodes are already saved in the current user's 'Your Music' library.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
 
         !!! warning
             This API endpoint is in **beta** and could break without warning.
@@ -963,6 +1000,9 @@ class API:
     ) -> models.Player | None:
         """Get information about the user's current playback state, including track or episode, progress, and active device.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_READ_PLAYBACK_STATE`][spotify.enums.Scope.USER_READ_PLAYBACK_STATE]
+
         Parameters
         ----------
         market : str, optional
@@ -991,7 +1031,10 @@ class API:
     ) -> None:
         """Transfer playback to a new device and optionally begin playback.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1008,6 +1051,9 @@ class API:
         """Get information about a user's available Spotify Connect devices.
         Some device models are not supported and will not be listed in the response.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_READ_PLAYBACK_STATE`][spotify.enums.Scope.USER_READ_PLAYBACK_STATE]
+
         Returns
         -------
         list[models.Device]
@@ -1022,6 +1068,9 @@ class API:
         self, *, market: MissingOr[str] = MISSING
     ) -> models.PlayerTrack | None:
         """Get the item currently being played on the user's Spotify account.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_READ_CURRENTLY_PLAYING`][spotify.enums.Scope.USER_READ_CURRENTLY_PLAYING]
 
         Parameters
         ----------
@@ -1073,7 +1122,10 @@ class API:
     ) -> None:
         """Start a new context or resume current playback on the user's active device.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1125,7 +1177,10 @@ class API:
     async def pause_playback(self, *, device_id: MissingOr[str] = MISSING) -> None:
         """Pause playback on the user's account.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1139,7 +1194,10 @@ class API:
     async def skip_to_next(self, *, device_id: MissingOr[str] = MISSING) -> None:
         """Skip to the next item in the user's queue.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1153,7 +1211,10 @@ class API:
     async def skip_to_previous(self, *, device_id: MissingOr[str] = MISSING) -> None:
         """Skip to the previous item in the user's queue.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1172,7 +1233,10 @@ class API:
     ) -> None:
         """Seeks to the given position in the user's currently playing track.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1199,7 +1263,10 @@ class API:
     ) -> None:
         """Set the repeat mode for the user's playback.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1223,7 +1290,10 @@ class API:
     ) -> None:
         """Set the volume for the user's current playback device.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1244,7 +1314,10 @@ class API:
     ) -> None:
         """Set shuffle mode for user's playback.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1285,6 +1358,9 @@ class API:
     ) -> models.CursorPaginator[models.PlayHistory]:
         """Get tracks from the current user's recently played tracks.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_READ_RECENTLY_PLAYED`][spotify.enums.Scope.USER_READ_RECENTLY_PLAYED]
+
         !!! note
             Currently doesn't support podcast episodes.
 
@@ -1318,6 +1394,10 @@ class API:
     async def get_users_queue(self) -> models.Queue:
         """Get the items in the user's queue.
 
+        !!! scopes "Required Authorization Scopes"
+            [`USER_READ_CURRENTLY_PLAYING`][spotify.enums.Scope.USER_READ_CURRENTLY_PLAYING]
+            & [`USER_READ_PLAYBACK_STATE`][spotify.enums.Scope.USER_READ_PLAYBACK_STATE]
+
         Returns
         -------
         models.Queue
@@ -1336,7 +1416,10 @@ class API:
     ) -> None:
         """Add an item to the end of the user's current playback queue.
 
-        !!! info
+        !!! scopes "Required Authorization Scope"
+            [`USER_MODIFY_PLAYBACK_STATE`][spotify.enums.Scope.USER_MODIFY_PLAYBACK_STATE]
+
+        !!! premium
             This endpoint only works for users who have Spotify Premium.
 
         Parameters
@@ -1408,6 +1491,12 @@ class API:
     ) -> None:
         """Change details for a playlist the current user owns.
 
+        !!! scopes "Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+                modify the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+                modify the current user's private playlists.
+
         Parameters
         ----------
         playlist_id : str
@@ -1451,6 +1540,10 @@ class API:
     ) -> models.Paginator[models.PlaylistItem]:
         """Get full details of the items of a playlist.
 
+        !!! scopes "Optional Authorization Scope"
+            [`PLAYLIST_READ_PRIVATE`][spotify.enums.Scope.PLAYLIST_READ_PRIVATE] - required to
+            access a private playlist belonging to the current user.
+
         Parameters
         ----------
         playlist_id : str
@@ -1489,6 +1582,7 @@ class API:
         assert items is not None
         return models.Paginator[models.PlaylistItem].model_validate_json(items)
 
+    # TODO: split replace are reorder into their own overloads
     @validator
     async def update_playlist_items(
         self,
@@ -1501,6 +1595,16 @@ class API:
         snapshot_id: MissingOr[str] = MISSING,
     ) -> str:
         """Reorder or replace playlist items.
+
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            modify the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            modify the current user's private playlists.
+
+        !!! note
+            Replace and reorder are mutually exclusive operations which cannot be applied together in
+            the same request.
 
         Parameters
         ----------
@@ -1556,6 +1660,12 @@ class API:
     ) -> str:
         """Add items to a playlist.
 
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            modify the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            modify the current user's private playlists.
+
         Parameters
         ----------
         playlist_id : str
@@ -1590,6 +1700,12 @@ class API:
     ) -> str:
         """Remove items from a playlist.
 
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            modify the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            modify the current user's private playlists.
+
         Parameters
         ----------
         playlist_id : str
@@ -1620,6 +1736,10 @@ class API:
         offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SimplePlaylist]:
         """Get a list of the playlists owned or followed by the current user.
+
+        !!! scopes "Optional Authorization Scope"
+            [`PLAYLIST_READ_PRIVATE`][spotify.enums.Scope.PLAYLIST_READ_PRIVATE] - required to
+            access the current user's private playlists.
 
         Parameters
         ----------
@@ -1652,6 +1772,12 @@ class API:
         offset: MissingOr[int] = MISSING,
     ) -> models.Paginator[models.SimplePlaylist]:
         """Get a list of the playlists owned or followed by a user.
+
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_READ_PRIVATE`][spotify.enums.Scope.PLAYLIST_READ_PRIVATE] - required to
+            access the current user's private playlists.
+            * [`PLAYLIST_READ_COLLABORATIVE`][spotify.enums.Scope.PLAYLIST_READ_COLLABORATIVE] -
+            required to access the current user's collaborative playlists.
 
         Parameters
         ----------
@@ -1688,6 +1814,12 @@ class API:
         description: MissingOr[str] = MISSING,
     ) -> models.Playlist:
         """Create a playlist for a Spotify user.
+
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            add to the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            add to the current user's private playlists.
 
         Parameters
         ----------
@@ -1828,6 +1960,16 @@ class API:
         image: bytes,
     ) -> None:
         """Replace the image used to represent a specific playlist.
+
+        !!! scopes "Required Authorization Scope"
+            * [`UGC_IMAGE_UPLOAD`][spotify.enums.Scope.UGC_IMAGE_UPLOAD] - required to
+            upload images to Spotify on the current user's behalf.
+
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            modify the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            modify the current user's private playlists.
 
         Parameters
         ----------
@@ -2070,6 +2212,9 @@ class API:
     ) -> models.Paginator[models.SavedShow]:
         """Get a list of the shows saved in the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
+
         Parameters
         ----------
         limit : int, default: 20
@@ -2096,6 +2241,9 @@ class API:
     ) -> None:
         """Save one or more shows to the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         show_ids : list[str]
@@ -2108,6 +2256,9 @@ class API:
         self, show_ids: list[str], *, market: MissingOr[str] = MISSING
     ) -> None:
         """Remove one or more shows from the current user's 'Your Music' library.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
 
         Parameters
         ----------
@@ -2122,6 +2273,9 @@ class API:
     @validator
     async def check_users_saved_shows(self, show_ids: list[str]) -> list[bool]:
         """Check if one or more shows is already saved in the current user's 'Your Music' library.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
 
         Parameters
         ----------
@@ -2193,6 +2347,9 @@ class API:
     ) -> models.Paginator[models.SavedTrack]:
         """Get a list of the tracks saved in the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
+
         Parameters
         ----------
         limit : int, default: 20
@@ -2222,6 +2379,9 @@ class API:
     ) -> None:
         """Save one or more tracks to the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         track_ids : list[str]
@@ -2233,6 +2393,9 @@ class API:
     async def remove_users_saved_tracks(self, track_ids: list[str]) -> None:
         """Remove one or more tracks from the current user's 'Your Music' library.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_MODIFY`][spotify.enums.Scope.USER_LIBRARY_MODIFY]
+
         Parameters
         ----------
         track_ids : list[str]
@@ -2243,6 +2406,9 @@ class API:
     @validator
     async def check_users_saved_tracks(self, track_ids: list[str]) -> list[bool]:
         """Check if one or more tracks is already saved in the current user's 'Your Music' library.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_LIBRARY_READ`][spotify.enums.Scope.USER_LIBRARY_READ]
 
         Parameters
         ----------
@@ -2546,6 +2712,12 @@ class API:
     async def get_current_users_profile(self) -> models.OwnUser:
         """Get detailed profile information about the current user.
 
+        !!! scopes "Optional Authorization Scopes"
+            * [`USER_READ_PRIVATE`][spotify.enums.Scope.USER_READ_PRIVATE] - required to access
+            the current user's subscription details.
+            * [`USER_READ_EMAIL`][spotify.enums.Scope.USER_READ_EMAIL] - required to access
+            the current user's email.
+
         Returns
         -------
         models.OwnUser
@@ -2585,6 +2757,9 @@ class API:
         time_range: MissingOr[enums.TimeRange] = MISSING,
     ) -> models.Paginator[models.Artist] | models.Paginator[models.TrackWithSimpleArtist]:
         """Get the current user's top artists or tracks based on calculated affinity.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_TOP_READ`][spotify.enums.Scope.USER_TOP_READ]
 
         Parameters
         ----------
@@ -2648,6 +2823,12 @@ class API:
     ) -> None:
         """Add the current user as a follower of a playlist.
 
+        !!! scopes "Optional Authorization Scopes"
+            [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            add the playlist to the current user's public playlists.
+            [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            add the playlist to the current user's private playlists.
+
         Parameters
         ----------
         playlist_id : str
@@ -2664,6 +2845,12 @@ class API:
     ) -> None:
         """Remove the current user as a follower of a playlist.
 
+        !!! scopes "Optional Authorization Scopes"
+            * [`PLAYLIST_MODIFY_PUBLIC`][spotify.enums.Scope.PLAYLIST_MODIFY_PUBLIC] - required to
+            remove the playlist from the current user's public playlists.
+            * [`PLAYLIST_MODIFY_PRIVATE`][spotify.enums.Scope.PLAYLIST_MODIFY_PRIVATE] - required to
+            remove the playlist from the current user's private playlists.
+
         Parameters
         ----------
         playlist_id : str
@@ -2678,6 +2865,9 @@ class API:
         limit: MissingOr[int] = MISSING,
     ) -> models.CursorPaginator[models.Artist]:
         """Get the current user's followed artists.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_FOLLOW_READ`][spotify.enums.Scope.USER_FOLLOW_READ]
 
         Parameters
         ----------
@@ -2706,6 +2896,9 @@ class API:
     ) -> None:
         """Add the current user as a follower of one or more artists or other Spotify users.
 
+        !!! scopes "Required Authorization Scope"
+            [`USER_FOLLOW_MODIFY`][spotify.enums.Scope.USER_FOLLOW_MODIFY]
+
         Parameters
         ----------
         ids : list[str]
@@ -2718,6 +2911,9 @@ class API:
     @validator
     async def unfollow_artists_or_users(self, ids: list[str], type: enums.UserType) -> None:
         """Remove the current user as a follower of one or more artists or other Spotify users.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_FOLLOW_MODIFY`][spotify.enums.Scope.USER_FOLLOW_MODIFY]
 
         Parameters
         ----------
@@ -2735,6 +2931,9 @@ class API:
         type: enums.UserType,
     ) -> list[bool]:
         """Check to see if the current user is following one or more artists or other Spotify users.
+
+        !!! scopes "Required Authorization Scope"
+            [`USER_FOLLOW_READ`][spotify.enums.Scope.USER_FOLLOW_READ]
 
         Parameters
         ----------
@@ -2761,6 +2960,9 @@ class API:
         playlist_id: str,
     ) -> bool:
         """Check to see if the current user is following a specified playlist.
+
+        !!! scopes "Required Authorization Scope"
+            [`PLAYLIST_READ_PRIVATE`][spotify.enums.Scope.PLAYLIST_READ_PRIVATE]
 
         Parameters
         ----------
