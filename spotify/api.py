@@ -34,7 +34,6 @@ def validator(
     return inner
 
 
-# TODO: rename file to api.py
 class API:
     """Implementation to make API calls with.
 
