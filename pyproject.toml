@@ -22,12 +22,10 @@ classifiers = [
 license = {file = "LICENSE"}
 
 [project.optional-dependencies]
-dev = [
-  "nox==2024.4.15",
-  "pyright==1.1.373",
-  "ruff==0.5.4",
-]
-docs = [
+dev = ["nox==2024.4.15"]
+"dev.format" = ["ruff==0.5.4"]
+"dev.typecheck" = ["pyright==1.1.373"]
+"dev.docs" = [
   "mkdocs==1.6.0",
   "mkdocs-material==9.5.30",
   "mkdocs-minify-plugin==0.8.0",
