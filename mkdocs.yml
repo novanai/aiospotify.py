@@ -1,5 +1,5 @@
-site_name: aiospotify documentation
-repo_url: https://github.com/novanai/aiospotify
+site_name: aiospotify.py documentation
+repo_url: https://github.com/novanai/aiospotify.py
 copyright: Copyright &copy; 2022-present novanai
 
 theme:

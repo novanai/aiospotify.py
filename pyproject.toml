@@ -1,5 +1,5 @@
 [project]
-name = "aiospotify"
+name = "aiospotify.py"
 dynamic = ["version"]
 authors = [ { name="novanai" } ]
 description = "An asynchronous Python 3.10+ Spotify Web API wrapper."
@@ -35,9 +35,9 @@ docs = [
 ]
 
 [project.urls]
-Documentation = "https://aiospotify.readthedocs.io/en/latest/"
-Repository = "https://github.com/novanai/aiospotify"
-Issues = "https://github.com/novanai/aiospotify/issues"
+Documentation = "https://aiospotifypy.readthedocs.io/en/latest/"
+Repository = "https://github.com/novanai/aiospotify.py"
+Issues = "https://github.com/novanai/aiospotify.py/issues"
 
 [build-system]
 requires = ["setuptools>=61.0"]

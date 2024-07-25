@@ -1,4 +1,4 @@
-# AIOSpotify
+# aiospotify.py
 
 An asynchronous Python 3.10+ Spotify Web API wrapper.
 
