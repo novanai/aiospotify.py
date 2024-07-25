@@ -1445,7 +1445,7 @@ class RecommendationSeed(BaseModel):
     id: str
     """The id used to select the seed. This will be the same as the string used in the
     `seed_artists`, `seed_tracks` or `seed_genres`
-    [parameter][spotify.rest.API.get_recommendations]."""
+    [parameter][spotify.api.API.get_recommendations]."""
     initial_pool_size: int
     """The number of recommended tracks available for the seed."""
     type: enums.RecommendationSeedType

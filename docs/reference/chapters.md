@@ -1,7 +1,7 @@
 !!! note
     Audiobooks are only available for the US, UK, Ireland, New Zealand and Australia markets.
 
-::: spotify.rest.API
+::: spotify.api.API
     options:
       members:
         - get_chapter

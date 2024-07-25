@@ -1,4 +1,4 @@
-::: spotify.rest.API
+::: spotify.api.API
     options:
       members:
         - search_for_item

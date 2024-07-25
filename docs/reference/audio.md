@@ -1,4 +1,4 @@
-::: spotify.rest.API
+::: spotify.api.API
     options:
       members:
         - get_tracks_audio_features

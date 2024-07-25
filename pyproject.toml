@@ -21,6 +21,19 @@ classifiers = [
 ]
 license = {file = "LICENSE"}
 
+[project.optional-dependencies]
+dev = [
+  "nox==2024.4.15",
+  "pyright==1.1.373",
+  "ruff==0.5.4",
+]
+docs = [
+  "mkdocs==1.6.0",
+  "mkdocs-material==9.5.30",
+  "mkdocs-minify-plugin==0.8.0",
+  "mkdocstrings-python==1.10.5",
+]
+
 [project.urls]
 Documentation = "https://aiospotify.readthedocs.io/en/latest/"
 Repository = "https://github.com/novanai/aiospotify"

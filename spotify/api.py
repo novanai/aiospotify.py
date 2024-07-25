@@ -1582,7 +1582,7 @@ class API:
         assert items is not None
         return models.Paginator[models.PlaylistItem].model_validate_json(items)
 
-    # TODO: split replace are reorder into their own overloads
+    # TODO: split replace and reorder into their own overloads
     @validator
     async def update_playlist_items(
         self,
