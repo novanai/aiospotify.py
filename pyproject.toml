@@ -1,8 +1,7 @@
 [project]
 name = "aiospotify.py"
-dynamic = ["version"]
+dynamic = ["version", "description"]
 authors = [ { name="novanai" } ]
-description = "An asynchronous Python 3.10+ Spotify Web API wrapper."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -44,9 +43,6 @@ build-backend = "flit_core.buildapi"
 
 [tool.flit.module]
 name = "spotify"
-
-[tool.setuptools.dynamic]
-version = {attr = "spotify.__version__"}
 
 [tool.ruff]
 exclude = ["docs", "site"]
