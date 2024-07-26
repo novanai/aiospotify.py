@@ -1,42 +1,132 @@
 from __future__ import annotations
 
-import abc
 import datetime
 import typing
 
-import attrs
+import pydantic
 
 from spotify import enums, utils
 
+__all__: typing.Sequence[str] = (
+    "SavedAlbum",
+    "SimpleAlbum",
+    "ArtistAlbum",
+    "Album",
+    "SimpleArtist",
+    "Artist",
+    "SimpleAudiobook",
+    "Audiobook",
+    "Author",
+    "AudioFeatures",
+    "AudioAnalysis",
+    "AudioAnalysisMeta",
+    "AudioAnalysisTrack",
+    "AudioAnalysisBar",
+    "AudioAnalysisBeat",
+    "AudioAnalysisSection",
+    "AudioAnalysisSegment",
+    "AudioAnalysisTatum",
+    "Category",
+    "SimpleChapter",
+    "Chapter",
+    "Copyright",
+    "SavedEpisode",
+    "SimpleEpisode",
+    "Episode",
+    "ExplicitContent",
+    "ExternalIDs",
+    "ExternalURLs",
+    "Followers",
+    "Image",
+    "Narrator",
+    "PlayerTrack",
+    "Player",
+    "Device",
+    "Context",
+    "Actions",
+    "PlayHistory",
+    "Queue",
+    "SimplePlaylist",
+    "Playlist",
+    "PlaylistTracks",
+    "PlaylistItem",
+    "Playlists",
+    "BasePaginator",
+    "Paginator",
+    "CursorPaginator",
+    "Cursors",
+    "Restrictions",
+    "ResumePoint",
+    "SavedShow",
+    "SimpleShow",
+    "Show",
+    "SearchResult",
+    "SavedTrack",
+    "LinkedFromTrack",
+    "SimpleTrack",
+    "Track",
+    "TrackWithSimpleArtist",
+    "SimpleUser",
+    "User",
+    "OwnUser",
+    "Recommendations",
+    "RecommendationSeed",
+)
 
-class ModelBase(abc.ABC):
+
+ArtistT = typing.TypeVar("ArtistT", bound="SimpleArtist")
+T = typing.TypeVar("T")
+
+
+class BaseModel(pydantic.BaseModel):
+    # Occasionally, this value for this field is upper case, so we convert it to lower case
+    @pydantic.field_validator("album_type", mode="before", check_fields=False)
     @classmethod
-    @abc.abstractmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> ModelBase:
-        ...
+    def album_type_validator(cls, v: str):
+        return v.lower()
+
+    @pydantic.field_validator("release_date", mode="before", check_fields=False)
+    @classmethod
+    def release_date_validator(cls, v: str | None) -> datetime.datetime | None:
+        if v == "0000" or v is None:
+            return None
+
+        return utils.datetime_from_timestamp(v)
 
 
-ModelT = typing.TypeVar("ModelT", bound=ModelBase)
+class DurationMS(pydantic.BaseModel):
+    @pydantic.field_validator("duration", mode="before", check_fields=False)
+    @classmethod
+    def duration_validator(cls, v: int) -> float:
+        return v / 1000
 
 
-@attrs.frozen
-class Album(ModelBase):
-    """An album."""
+class SavedAlbum(BaseModel):
+    """Information about an album saved to a user's 'Your Music' library."""
+
+    added_at: datetime.datetime
+    """The date and time the album was saved."""
+    album: Album
+    """The album."""
+
+
+class SimpleAlbum(BaseModel):
+    """A simplified album."""
 
     album_type: enums.AlbumType
     """The type of the album."""
     total_tracks: int
     """The number of tracks in the album."""
-    available_markets: list[str] | None
+    available_markets: list[str] | None = None
     """The markets in which the album is available
-    (`ISO 3166-1 alpha-2 country codes <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_).
-    Returns ``None`` if a market was specified in the request.
+    ([ISO 3166-1 alpha-2 country codes](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)).
     
-    .. note::
-        An album is considered available in a market when at least 1 of its tracks is available
-        in that market."""
+    !!! note
+        An album is considered available in a market when at least 1 of its tracks is available in
+        that market.
+    """
     external_urls: ExternalURLs
-    """Known external URLs for this album."""
+    """Known external URLs for the album."""
     href: str
     """A link to the Web API endpoint providing full details of the album."""
     id: str
@@ -44,478 +134,107 @@ class Album(ModelBase):
     images: list[Image]
     """The cover art for the album in various sizes, widest first."""
     name: str
-    """The name of the album."""
-    release_date: datetime.datetime
+    """The name of the album.
+
+    !!! note
+        In case of an album takedown, the value may be an empty string.
+    """
+    release_date: datetime.date
     """The date the album was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which ``release_date`` is known."""
-    restrictions: Restrictions | None
-    """Present when a content restriction is applied."""
+    """The precision with which [`release_date`][spotify.models.SimpleAlbum.release_date] is
+    known.
+    """
+    restrictions: Restrictions | None = None
+    """Restrictions applied to the album. Included when a content restriction is applied."""
     uri: str
     """The Spotify URI for the album."""
-    artists: list[Artist]
+    artists: list[SimpleArtist]
     """The artists of the album."""
-    album_group: enums.AlbumGroup | None
-    """Represents the relationship between the artist and the album. 
-    Present when getting an artist's albums."""
-    tracks: Paginator[Track] | None
+
+
+class ArtistAlbum(SimpleAlbum):
+    """An artist's album."""
+
+    album_group: enums.AlbumGroup
+    """Represents the relationship between the artist and the album."""
+
+
+class Album(SimpleAlbum):
+    """An album."""
+
+    tracks: Paginator[SimpleTrack]
     """The tracks of the album."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Album:
-        return cls(
-            enums.AlbumType(payload["album_type"]),
-            payload["total_tracks"],
-            payload.get("available_markets"),
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload["images"]],
-            payload["name"],
-            utils.datetime_from_timestamp(payload["release_date"]),
-            enums.ReleaseDatePrecision(payload["release_date_precision"]),
-            Restrictions.from_payload(res)
-            if (res := payload.get("restrictions"))
-            else None,
-            payload["uri"],
-            [Artist.from_payload(ar) for ar in payload["artists"]],
-            payload.get("album_group"),
-            Paginator.from_payload(tra, Track)
-            if (tra := payload.get("tracks"))
-            else None,
-        )
+    copyrights: list[Copyright]
+    """The copyright statements of the album."""
+    external_ids: ExternalIDs
+    """Known external IDs for the album."""
+    genres: list[str]
+    """The genres the album is associated with. If not yet classified, this list is empty."""
+    label: str
+    """The label associated with the album."""
+    popularity: int
+    """The popularity of the album. The value will be between 0 and 100, with 100 being the most
+    popular.
+    """
 
 
-@attrs.frozen
-class Artist(ModelBase):
-    """An artist."""
+class SimpleArtist(BaseModel):
+    """A simplified artist."""
 
     external_urls: ExternalURLs
-    """Known external URLs for this artist."""
-    followers: Followers | None
-    """Information about the followers of the artist."""
-    genres: list[str]  # list[Genre] if I can find list of all possible genres
-    """A list of the genres the artist is associated with. If not yet classified, the list is empty."""
+    """Known external URLs for the artist."""
     href: str
     """A link to the Web API endpoint providing full details of the artist."""
     id: str
     """The Spotify ID for the artist."""
-    images: list[Image]
-    """Images of the artist in various sizes, widest first."""
     name: str
     """The name of the artist."""
-    popularity: int | None
-    """The popularity of the artist. The value will be between 0 and 100, with 100 being the most
-    popular. The artist's popularity is calculated from the popularity of all the artist's tracks."""
     uri: str
     """The Spotify URI for the artist."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Artist:
-        return cls(
-            ExternalURLs.from_payload(payload["external_urls"]),
-            Followers.from_payload(fol) if (fol := payload.get("followers")) else None,
-            payload.get("genres", []),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload.get("images", [])],
-            payload["name"],
-            payload.get("popularity"),
-            payload["uri"],
-        )
+
+class Artist(SimpleArtist):
+    """An artist."""
+
+    followers: Followers
+    """Information about the followers of the artist."""
+    genres: list[str]
+    """A list of the genres the artist is associated with. If not yet classified, the list is
+    empty.
+    """
+    images: list[Image]
+    """Images of the artist in various sizes, widest first."""
+    popularity: int
+    """The popularity of the artist. The value will be between 0 and 100, with 100 being the most
+    popular. The artist's popularity is calculated from the popularity of all the artist's tracks.
+    """
 
 
-@attrs.frozen
-class AudioAnalysis(ModelBase):
-    """Track audio analysis."""
-
-    meta: AudioAnalysisMeta
-    """Metadata."""
-    track: AudioAnalysisTrack
-    """Track information"""
-    bars: list[AudioAnalysisBar]
-    """The time intervals of the bars throughout the track."""
-    beats: list[AudioAnalysisBeat]
-    """The time intervals of beats throughout the track. """
-    sections: list[AudioAnalysisSection]
-    """Sections are defined by large variations in rhythm or timbre, e.g. chorus, verse, bridge,
-    guitar solo, etc. Each section contains its own descriptions of tempo, key, mode, time_signature,
-    and loudness."""
-    segments: list[AudioAnalysisSegment]
-    """Each segment contains a roughly consistent sound throughout its duration."""
-    tatums: list[AudioAnalysisTatum]
-    """A tatum represents the lowest regular pulse train that a listener intuitively infers from the
-    timing of perceived musical events (segments)."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysis:
-        return cls(
-            AudioAnalysisMeta.from_payload(payload["meta"]),
-            AudioAnalysisTrack.from_payload(payload["track"]),
-            [AudioAnalysisBar.from_payload(bar) for bar in payload["bars"]],
-            [AudioAnalysisBeat.from_payload(bea) for bea in payload["beats"]],
-            [AudioAnalysisSection.from_payload(sec) for sec in payload["sections"]],
-            [AudioAnalysisSegment.from_payload(seg) for seg in payload["segments"]],
-            [AudioAnalysisTatum.from_payload(tat) for tat in payload["tatums"]],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisMeta(ModelBase):
-    """Audio analysis metadata."""
-
-    analyzer_version: str
-    """The version of the Analyzer used to analyze this track."""
-    platform: str
-    """The platform used to read the track's audio data."""
-    detailed_status: str
-    """A detailed status code for this track. If analysis data is missing, this code may explain why."""
-    status_code: int
-    """The return code of the analyzer process. ``0`` if successful, ``1`` if any errors occurred."""
-    timestamp: datetime.datetime
-    """The time at which this track was analyzed."""
-    analysis_time: datetime.timedelta
-    """The amount of time taken to analyze this track."""
-    input_process: str
-    """The method used to read the track's audio data."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisMeta:
-        return cls(
-            payload["analyzer_version"],
-            payload["platform"],
-            payload["detailed_status"],
-            payload["status_code"],
-            datetime.datetime.fromtimestamp(payload["timestamp"]),
-            datetime.timedelta(seconds=payload["analysis_time"]),
-            payload["input_process"],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisTrack(ModelBase):
-    """Audio analysis track information."""
-
-    num_samples: int
-    """The exact number of audio samples analyzed from this track. See also analysis_sample_rate."""
-    duration: float
-    """Length of the track in seconds."""
-    sample_md5: str
-    """This field will always contain the empty string."""
-    offset_seconds: int
-    """An offset to the start of the region of the track that was analyzed. (As the entire track is
-    analyzed, this should always be 0.)"""
-    window_seconds: int
-    """The length of the region of the track was analyzed, if a subset of the track was analyzed.
-    (As the entire track is analyzed, this should always be 0.)"""
-    analysis_sample_rate: int
-    """The sample rate used to decode and analyze this track. May differ from the actual sample rate
-    of this track available on Spotify."""
-    analysis_channels: int
-    """The number of channels used for analysis. If 1, all channels are summed together to mono before
-    analysis."""
-    end_of_fade_in: float
-    """The time, in seconds, at which the track's fade-in period ends. If the track has no fade-in,
-    this will be 0.0."""
-    start_of_fade_out: float
-    """The time, in seconds, at which the track's fade-out period starts. If the track has no fade-out,
-    this should match the track's length."""
-    loudness: float
-    """The overall loudness of a track in decibels (dB). Loudness values are averaged across the entire
-    track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound
-    that is the primary psychological correlate of physical strength (amplitude). Values typically range
-    between -60 and 0 db."""
-    tempo: float
-    """The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo
-    is the speed or pace of a given piece and derives directly from the average beat duration."""
-    tempo_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the tempo."""
-    time_signature: int
-    """An estimated time signature. The time signature (meter) is a notational convention to specify
-    how many beats are in each bar (or measure). The time signature ranges from 3 to 7 indicating time
-    signatures of "3/4", to "7/4"."""
-    time_signature_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the time_signature."""
-    key: int
-    """The key the track is in. Integers map to pitches using standard
-    `Pitch Class notation <https://en.wikipedia.org/wiki/Pitch_class>`_. E.g. 0 = C, 1 = C♯/D♭, 2 = D,
-    and so on. If no key was detected, the value is -1."""
-    key_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the key."""
-    mode: int
-    """Mode indicates the modality (major or minor) of a track, the type of scale from which its melodic
-    content is derived. Major is represented by 1 and minor is 0."""
-    mode_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the mode."""
-    codestring: str
-    """An `Echo Nest Musical Fingerprint (ENMFP) <https://academiccommons.columbia.edu/doi/10.7916/D8Q248M4>`_
-    codestring for this track."""
-    code_version: float
-    """A version number for the Echo Nest Musical Fingerprint format used in the codestring field."""
-    echoprintstring: str
-    """An `EchoPrint <https://github.com/spotify/echoprint-codegen>`_ codestring for this track."""
-    echoprint_version: float
-    """A version number for the EchoPrint format used in the echoprintstring field."""
-    synchstring: str
-    """A `Synchstring <https://github.com/echonest/synchdata>`_ for this track."""
-    synch_version: float
-    """A version number for the Synchstring used in the synchstring field."""
-    rhythmstring: str
-    """A Rhythmstring for this track. The format of this string is similar to the Synchstring."""
-    rhythm_version: float
-    """A version number for the Rhythmstring used in the rhythmstring field."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisTrack:
-        return cls(
-            payload["num_samples"],
-            payload["duration"],
-            payload["sample_md5"],
-            payload["offset_seconds"],
-            payload["window_seconds"],
-            payload["analysis_sample_rate"],
-            payload["analysis_channels"],
-            payload["end_of_fade_in"],
-            payload["start_of_fade_out"],
-            payload["loudness"],
-            payload["tempo"],
-            payload["tempo_confidence"],
-            payload["time_signature"],
-            payload["time_signature_confidence"],
-            payload["key"],
-            payload["key_confidence"],
-            payload["mode"],
-            payload["mode_confidence"],
-            payload["codestring"],
-            payload["code_version"],
-            payload["echoprintstring"],
-            payload["echoprint_version"],
-            payload["synchstring"],
-            payload["synch_version"],
-            payload["rhythmstring"],
-            payload["rhythm_version"],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisBar(ModelBase):
-    """Audio analysis of a bar.
-    A bar (or measure) is a segment of time defined as a given number of beats."""
-
-    start: float
-    """The starting point (in seconds) of the time interval."""
-    duration: float
-    """The duration (in seconds) of the time interval."""
-    confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the interval."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisBar:
-        return cls(
-            payload["start"],
-            payload["duration"],
-            payload["confidence"],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisBeat(ModelBase):
-    """Audio analysis of a beat.
-    A beat is the basic time unit of a piece of music; for example, each tick of a metronome.
-    Beats are typically multiples of tatums."""
-
-    start: float
-    """The starting point (in seconds) of the time interval."""
-    duration: float
-    """The duration (in seconds) of the time interval."""
-    confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the interval."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisBeat:
-        return cls(
-            payload["start"],
-            payload["duration"],
-            payload["confidence"],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisSection(ModelBase):
-    """Audio analysis of a section.
-    Sections are defined by large variations in rhythm or timbre, e.g. chorus, verse, bridge, guitar
-    solo, etc. Each section contains its own descriptions of tempo, key, mode, time_signature, and
-    loudness."""
-
-    start: float
-    """The starting point (in seconds) of the section."""
-    duration: float
-    """The duration (in seconds) of the section."""
-    confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the section's "designation"."""
-    loudness: float
-    """The overall loudness of the section in decibels (dB). Loudness values are useful for comparing
-    relative loudness of sections within tracks."""
-    tempo: float
-    """The overall estimated tempo of the section in beats per minute (BPM). In musical terminology,
-    tempo is the speed or pace of a given piece and derives directly from the average beat duration."""
-    tempo_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the tempo. Some tracks contain tempo
-    changes or sounds which don't contain tempo (like pure speech) which would correspond to a low
-    value in this field."""
-    key: int
-    """The estimated overall key of the section. The values in this field ranging from 0 to 11 mapping
-    to pitches using standard Pitch Class notation (E.g. 0 = C, 1 = C♯/D♭, 2 = D, and so on). If no key
-    was detected, the value is -1."""
-    key_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the key. Songs with many key changes may
-    correspond to low values in this field."""
-    mode: float
-    """Indicates the modality (major or minor) of a section, the type of scale from which its melodic
-    content is derived. This field will contain a 0 for "minor", a 1 for "major", or a -1 for no result.
-    Note that the major key (e.g. C major) could more likely be confused with the minor key at 3
-    semitones lower (e.g. A minor) as both keys carry the same pitches."""
-    mode_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the mode."""
-    time_signature: int
-    """An estimated time signature. The time signature (meter) is a notational convention to specify
-    how many beats are in each bar (or measure). The time signature ranges from 3 to 7 indicating time
-    signatures of "3/4", to "7/4"."""
-    time_signature_confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the time_signature. Sections with time
-    signature changes may correspond to low values in this field."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisSection:
-        return cls(
-            payload["start"],
-            payload["duration"],
-            payload["confidence"],
-            payload["loudness"],
-            payload["tempo"],
-            payload["tempo_confidence"],
-            payload["key"],
-            payload["key_confidence"],
-            payload["mode"],
-            payload["mode_confidence"],
-            payload["time_signature"],
-            payload["time_signature_confidence"],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisSegment(ModelBase):
-    """Audio analysis segment."""
-
-    start: float
-    """The starting point (in seconds) of the segment."""
-    duration: float
-    """The duration (in seconds) of the segment."""
-    confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the segmentation. Segments of the song
-    which are difficult to logically segment (e.g: noise) may correspond to low values in this field."""
-    loudness_start: float
-    """The onset loudness of the segment in decibels (dB). Combined with loudness_max and
-    loudness_max_time, these components can be used to describe the "attack" of the segment."""
-    loudness_max: float
-    """The peak loudness of the segment in decibels (dB). Combined with loudness_start and
-    loudness_max_time, these components can be used to describe the "attack" of the segment."""
-    loudness_max_time: float
-    """The segment-relative offset of the segment peak loudness in seconds. Combined with loudness_start
-    and loudness_max, these components can be used to desctibe the "attack" of the segment."""
-    loudness_end: float
-    """The offset loudness of the segment in decibels (dB). This value should be equivalent to the
-    loudness_start of the following segment."""
-    pitches: list[float]
-    """Pitch content is given by a “chroma” vector, corresponding to the 12 pitch classes C, C#, D to B,
-    with values ranging from 0 to 1 that describe the relative dominance of every pitch in the chromatic
-    scale. For example a C Major chord would likely be represented by large values of C, E and G (i.e.
-    classes 0, 4, and 7).
-
-    Vectors are normalized to 1 by their strongest dimension, therefore noisy sounds are likely
-    represented by values that are all close to 1, while pure tones are described by one value at 1
-    (the pitch) and others near 0. As can be seen below, the 12 vector indices are a combination of
-    low-power spectrum values at their respective pitch frequencies.
-    
-    .. image:: https://developer.spotify.com/assets/audio/Pitch_vector.png"""
-    timbre: list[float]
-    """Timbre is the quality of a musical note or sound that distinguishes different types of musical
-    instruments, or voices. It is a complex notion also referred to as sound color, texture, or tone 
-    quality, and is derived from the shape of a segment's spectro-temporal surface, independently of
-    pitch and loudness. The timbre feature is a vector that includes 12 unbounded values roughly
-    centered around 0. Those values are high level abstractions of the spectral surface, ordered by
-    degree of importance.
-
-    For completeness however, the first dimension represents the average loudness of the segment; 
-    second emphasizes brightness; third is more closely correlated to the flatness of a sound; fourth
-    to sounds with a stronger attack; etc. See an image below representing the 12 basis functions (i.e.
-    template segments).
-
-    .. image:: https://developer.spotify.com/assets/audio/Timbre_basis_functions.png
-
-    The actual timbre of the segment is best described as a linear combination of these 12 basis
-    functions weighted by the coefficient values: timbre = c1 x b1 + c2 x b2 + ... + c12 x b12, where
-    c1 to c12 represent the 12 coefficients and b1 to b12 the 12 basis functions as displayed below.
-    Timbre vectors are best used in comparison with each other."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisSegment:
-        return cls(
-            payload["start"],
-            payload["duration"],
-            payload["confidence"],
-            payload["loudness_start"],
-            payload["loudness_max"],
-            payload["loudness_max_time"],
-            payload["loudness_end"],
-            payload["pitches"],
-            payload["timbre"],
-        )
-
-
-@attrs.frozen
-class AudioAnalysisTatum(ModelBase):
-    """Audio analysis tatum.
-
-    A tatum represents the lowest regular pulse train that a listener intuitively infers from the timing
-    of perceived musical events (segments)."""
-
-    start: float
-    """The starting point (in seconds) of the time interval."""
-    duration: float
-    """The duration (in seconds) of the time interval."""
-    confidence: float
-    """The confidence, from 0.0 to 1.0, of the reliability of the interval."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioAnalysisTatum:
-        return cls(
-            payload["start"],
-            payload["duration"],
-            payload["confidence"],
-        )
-
-
-@attrs.frozen
-class Audiobook(ModelBase):
-    """An audiobook."""
+class SimpleAudiobook(BaseModel):
+    """A simplified audiobook."""
 
     authors: list[Author]
-    """The author(s) for the audiobook."""
+    """The author(s) of the audiobook."""
     available_markets: list[str]
     """A list of the countries in which the audiobook can be played, identified by their
-    `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    [ISO 3166-1 alpha-2 code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+    """
     copyrights: list[Copyright]
     """The copyright statements of the audiobook."""
     description: str
     """A description of the audiobook. HTML tags are stripped away from this field, use the
-    ``models.Audiobook.html_description`` field in case HTML tags are needed."""
+    [`html_description`][spotify.models.SimpleAudiobook.html_description] field in case HTML tags
+    are needed.
+    """
     html_description: str
     """A description of the audiobook. This field may contain HTML tags."""
+    edition: str | None
+    """The edition of the audiobook."""
     explicit: bool
     """Whether or not the audiobook has explicit content."""
     external_urls: ExternalURLs
-    """External URLs for this audiobook."""
+    """External URLs for the audiobook."""
     href: str
     """A link to the Web API endpoint providing full details of the audiobook."""
     id: str
@@ -524,7 +243,8 @@ class Audiobook(ModelBase):
     """The cover art for the audiobook in various sizes, widest first."""
     languages: list[str]
     """A list of the languages used in the audiobook, identified by their
-    `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
+    [ISO 639 code](https://en.wikipedia.org/wiki/ISO_639).
+    """
     media_type: str
     """The media type of the audiobook."""
     name: str
@@ -535,242 +255,542 @@ class Audiobook(ModelBase):
     """The publisher of the audiobook."""
     uri: str
     """The Spotify URI for the audiobook."""
-    total_chapters: int
-    """The number of chapters in this audiobook."""
-    chapters: Paginator[Chapter] | None
-    """The chapters of the audiobook. Not available when fetching several audiobooks or fetching
-    a specific chapter."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Audiobook:
-        return cls(
-            [Author.from_payload(aut) for aut in payload["authors"]],
-            payload["available_markets"],
-            [Copyright.from_payload(cop) for cop in payload["copyrights"]],
-            payload["description"],
-            payload["html_description"],
-            payload["explicit"],
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload["images"]],
-            payload["languages"],
-            payload["media_type"],
-            payload["name"],
-            [Narrator.from_payload(nar) for nar in payload["narrators"]],
-            payload["publisher"],
-            payload["uri"],
-            payload["total_chapters"],
-            Paginator.from_payload(cha, Chapter)
-            if (cha := payload.get("chapters"))
-            else None,
-        )
+    total_chapters: int | None
+    """The number of chapters in the audiobook."""
 
 
-@attrs.frozen
-class AudioFeatures(ModelBase):
+class Audiobook(SimpleAudiobook):
+    """An audiobook."""
+
+    chapters: Paginator[SimpleChapter]
+    """The chapters of the audiobook."""
+
+
+class Author(BaseModel):
+    """Audiobook author information."""
+
+    name: str
+    """The name of the author."""
+
+
+class AudioFeatures(BaseModel, DurationMS):
     """Track audio features."""
 
     acousticness: float
-    """A confidence measure from ``0.0`` to ``1.0`` of whether the track is acoustic. 
-    ``1.0`` represents high confidence the track is acoustic."""
+    """A confidence measure from `0.0` to `1.0` of whether the track is acoustic. `1.0` represents
+    high confidence the track is acoustic.
+    """
     analysis_url: str
-    """A URL to access the full audio analysis of this track.
-    An access token is required to access this data."""
+    """A link to the Web API endpoint providing full details of the audio analysis."""
     danceability: float
     """Danceability describes how suitable a track is for dancing based on a combination of
     musical elements including tempo, rhythm stability, beat strength, and overall regularity.
-    A value of ``0.0`` is least danceable and ``1.0`` is most danceable."""
-    duration: datetime.timedelta
+    A value of `0.0` is least danceable and `1.0` is most danceable.
+    """
+    duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
     """The duration of the track."""
     energy: float
-    """Energy is a measure from ``0.0`` to ``1.0`` and represents a perceptual measure of intensity and activity.
-    Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy,
-    while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute
-    include dynamic range, perceived loudness, timbre, onset rate, and general entropy."""
+    """Energy is a measure from `0.0` to `1.0` and represents a perceptual measure of intensity
+    and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal
+    has high energy, while a Bach prelude scores low on the scale. Perceptual features
+    contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate,
+    and general entropy.
+    """
     id: str
     """The Spotify ID for the track."""
     instrumentalness: float
-    """Predicts whether a track contains no vocals. "Ooh" and "aah" sounds are treated as instrumental in 
-    this context. Rap or spoken word tracks are clearly "vocal". The closer the instrumentalness value is 
-    to ``1.0``, the greater likelihood the track contains no vocal content. Values above ``0.5`` are
-    intended to represent instrumental tracks, but confidence is higher as the value approaches ``1.0``."""
+    """Predicts whether a track contains no vocals. "Ooh" and "aah" sounds are treated as
+    instrumental in this context. Rap or spoken word tracks are clearly "vocal". The closer the
+    instrumentalness value is to `1.0`, the greater likelihood the track contains no vocal
+    content. Values above `0.5` are intended to represent instrumental tracks, but confidence is
+    higher as the value approaches `1.0`.
+    """
+    # TODO: maybe use an enum for this value?
     key: int
     """The key the track is in. Integers map to pitches using standard
-    `Pitch Class notation <https://en.wikipedia.org/wiki/Pitch_class>`_. E.g. ``0`` = C, ``1`` = C♯/D♭,
-    ``2`` = D, and so on. If no key was detected, the value is ``-1``."""
+    [Pitch Class notation](https://en.wikipedia.org/wiki/Pitch_class). E.g. `0` = C, `1` = C♯/D♭,
+    `2` = D, and so on. If no key was detected, the value is `-1`.
+    """
     liveness: float
     """Detects the presence of an audience in the recording. Higher liveness values represent an
-    increased probability that the track was performed live. A value above ``0.8`` provides strong
-    likelihood that the track is live."""
+    increased probability that the track was performed live. A value above `0.8` provides strong
+    likelihood that the track is live.
+    """
     loudness: float
     """The overall loudness of a track in decibels (dB). Loudness values are averaged across the
     entire track and are useful for comparing relative loudness of tracks. Loudness is the quality
-    of a sound that is the primary psychological correlate of physical strength (amplitude). Values
-    typically range between ``-60`` and ``0`` db."""
+    of a sound that is the primary psychological correlate of physical strength (amplitude).
+    Values typically range between `-60` and `0` dB.
+    """
     mode: enums.TrackMode
     """Mode indicates the modality (major or minor) of a track, the type of scale from which its
-    melodic content is derived. Major is represented by ``1`` and minor is ``0``."""
+    melodic content is derived.
+    """
     speechiness: float
-    """Speechiness detects the presence of spoken words in a track. The more exclusively speech-like
-    the recording (e.g. talk show, audio book, poetry), the closer to ``1.0`` the attribute value. Values
-    above ``0.66`` describe tracks that are probably made entirely of spoken words. Values between
-    ``0.33`` and ``0.66`` describe tracks that may contain both music and speech, either in sections or
-    layered, including such cases as rap music. Values below ``0.33`` most likely represent music and 
-    other non-speech-like tracks."""
+    """Speechiness detects the presence of spoken words in a track. The more exclusively
+    speech-like the recording (e.g. talk show, audio book, poetry), the closer to `1.0` the
+    attribute value. Values above `0.66` describe tracks that are probably made entirely of spoken
+    words. Values between `0.33` and `0.66` describe tracks that may contain both music and
+    speech, either in sections or layered, including such cases as rap music. Values below `0.33`
+    most likely represent music and other non-speech-like tracks.
+    """
     tempo: float
-    """The overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo
-    is the speed or pace of a given piece and derives directly from the average beat duration."""
+    """The overall estimated tempo of a track in beats per minute (BPM). In musical terminology,
+    tempo is the speed or pace of a given piece and derives directly from the average beat
+    duration.
+    """
     time_signature: int
-    """An estimated time signature. The time signature (meter) is a notational convention to specify
-    how many beats are in each bar (or measure). The time signature ranges from ``3`` to ``7`` indicating
-    time signatures of "3/4", to "7/4"."""
+    """An estimated time signature. The time signature (meter) is a notational convention to
+    specify how many beats are in each bar (or measure). The time signature ranges from `3` to `7`
+    indicating time signatures of "3/4" to "7/4".
+    """
     track_href: str
     """A link to the Web API endpoint providing full details of the track."""
     uri: str
     """The Spotify URI for the track."""
     valence: float
-    """A measure from ``0.0`` to ``1.0`` describing the musical positiveness conveyed by a track. Tracks
-    with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence
-    sound more negative (e.g. sad, depressed, angry)."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> AudioFeatures:
-        return cls(
-            payload["acousticness"],
-            payload["analysis_url"],
-            payload["danceability"],
-            datetime.timedelta(milliseconds=payload["duration_ms"]),
-            payload["energy"],
-            payload["id"],
-            payload["instrumentalness"],
-            payload["key"],
-            payload["liveness"],
-            payload["loudness"],
-            enums.TrackMode(payload["mode"]),
-            payload["speechiness"],
-            payload["tempo"],
-            payload["time_signature"],
-            payload["track_href"],
-            payload["uri"],
-            payload["valence"],
-        )
+    """A measure from `0.0` to `1.0` describing the musical positiveness conveyed by a track.
+    Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks
+    with low valence sound more negative (e.g. sad, depressed, angry).
+    """
 
 
-@attrs.frozen
-class Author(ModelBase):
-    """Author information."""
+class AudioAnalysis(BaseModel):
+    """Track audio analysis."""
 
+    meta: AudioAnalysisMeta
+    """Metadata for the analysis."""
+    track: AudioAnalysisTrack
+    """Track information"""
+    bars: list[AudioAnalysisBar]
+    """The time intervals of the bars throughout the track."""
+    beats: list[AudioAnalysisBeat]
+    """The time intervals of beats throughout the track."""
+    sections: list[AudioAnalysisSection]
+    """Sections are defined by large variations in rhythm or timbre, e.g. chorus, verse, bridge,
+    guitar solo, etc. Each section contains its own descriptions of
+    [`tempo`][spotify.models.AudioAnalysisSection.tempo],
+    [`key`][spotify.models.AudioAnalysisSection.key],
+    [`mode`][spotify.models.AudioAnalysisSection.mode],
+    [`time_signature`][spotify.models.AudioAnalysisSection.time_signature], and
+    [`loudness`][spotify.models.AudioAnalysisSection.loudness].
+    """
+    segments: list[AudioAnalysisSegment]
+    """Each segment contains a roughly consistent sound throughout its duration."""
+    tatums: list[AudioAnalysisTatum]
+    """A tatum represents the lowest regular pulse train that a listener intuitively infers from
+    the timing of perceived musical events (segments).
+    """
+
+
+class AudioAnalysisMeta(BaseModel):
+    """Audio analysis metadata."""
+
+    analyzer_version: str
+    """The version of the Analyzer used to analyze the track."""
+    platform: str
+    """The platform used to read the track's audio data."""
+    detailed_status: str
+    """A detailed status code for the track. If analysis data is missing, this code may explain
+    why.
+    """
+    status_code: enums.StatusCode
+    """The return code of the analyzer process."""
+    timestamp: datetime.datetime
+    """The time at which the track was analyzed."""
+    analysis_time: datetime.timedelta
+    """The amount of time taken to analyze the track."""
+    input_process: str
+    """The method used to read the track's audio data."""
+
+
+class AudioAnalysisTrack(BaseModel):
+    """Audio analysis track information."""
+
+    num_samples: int
+    """The exact number of audio samples analyzed from the track. See also
+    [`analysis_sample_rate`][spotify.models.AudioAnalysisTrack.analysis_sample_rate].
+    """
+    duration: float
+    """Length of the track in seconds."""
+    sample_md5: str
+    """This field will always contain an empty string."""
+    offset_seconds: int
+    """An offset to the start of the region of the track that was analyzed. (As the entire track
+    is analyzed, this should always be `0`.)
+    """
+    window_seconds: int
+    """The length of the region of the track was analyzed, if a subset of the track was analyzed.
+    (As the entire track is analyzed, this should always be `0`.)
+    """
+    analysis_sample_rate: int
+    """The sample rate used to decode and analyze the track. May differ from the actual sample
+    rate of the track available on Spotify.
+    """
+    analysis_channels: int
+    """The number of channels used for analysis. If `1`, all channels are summed together to mono
+    before analysis.
+    """
+    end_of_fade_in: float
+    """The time, in seconds, at which the track's fade-in period ends. If the track has no
+    fade-in, this will be `0.0`.
+    """
+    start_of_fade_out: float
+    """The time, in seconds, at which the track's fade-out period starts. If the track has no
+    fade-out, this should match the track's length.
+    """
+    loudness: float
+    """The overall loudness of a track in decibels (dB). Loudness values are averaged across the
+    entire track and are useful for comparing relative loudness of tracks. Loudness is the quality
+    of a sound that is the primary psychological correlate of physical strength (amplitude).
+    Values typically range between `-60` and `0` dB.
+    """
+    tempo: float
+    """The overall estimated tempo of a track in beats per minute (BPM). In musical terminology,
+    tempo is the speed or pace of a given piece and derives directly from the average beat
+    duration.
+    """
+    tempo_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`tempo`][spotify.models.AudioAnalysisTrack.tempo].
+    """
+    time_signature: int
+    """An estimated time signature. The time signature (meter) is a notational convention to
+    specify how many beats are in each bar (or measure). The time signature ranges from `3` to `7`
+    indicating time signatures of "3/4" to "7/4".
+    """
+    time_signature_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`time_signature`][spotify.models.AudioAnalysisTrack.time_signature].
+    """
+    key: int
+    """The key the track is in. Integers map to pitches using standard
+    [Pitch Class notation](https://en.wikipedia.org/wiki/Pitch_class). E.g. `0` = C, `1` = C♯/D♭,
+    `2` = D, and so on. If no key was detected, the value is `-1`.
+    """
+    key_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`key`][spotify.models.AudioAnalysisTrack.key].
+    """
+    mode: enums.TrackMode
+    """Mode indicates the modality (major or minor) of a track, the type of scale from which its
+    melodic content is derived.
+    """
+    mode_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`mode`][spotify.models.AudioAnalysisTrack.mode].
+    """
+    codestring: str
+    """An [Echo Nest Musical Fingerprint (ENMFP)](https://academiccommons.columbia.edu/doi/10.7916/D8Q248M4)
+    codestring for the track.
+    """
+    code_version: float
+    """A version number for the Echo Nest Musical Fingerprint format used in the
+    [`codestring`][spotify.models.AudioAnalysisTrack.codestring] field.
+    """
+    echoprintstring: str
+    """An [EchoPrint](https://github.com/spotify/echoprint-codegen) codestring for the track."""
+    echoprint_version: float
+    """A version number for the EchoPrint format used in the
+    [`echoprintstring`][spotify.models.AudioAnalysisTrack.echoprintstring] field.
+    """
+    synchstring: str
+    """A [Synchstring](https://github.com/echonest/synchdata) for the track."""
+    synch_version: float
+    """A version number for the Synchstring used in the
+    [`synchstring`][spotify.models.AudioAnalysisTrack.synchstring] field.
+    """
+    rhythmstring: str
+    """A Rhythmstring for the track. The format of this string is similar to the Synchstring."""
+    rhythm_version: float
+    """A version number for the Rhythmstring used in the
+    [`rhythmstring`][spotify.models.AudioAnalysisTrack.rhythmstring] field.
+    """
+
+
+class AudioAnalysisBar(BaseModel):
+    """Audio analysis of a bar. A bar (or measure) is a segment of time defined as a given number
+    of beats.
+    """
+
+    start: datetime.timedelta
+    """The starting point of the time interval."""
+    duration: datetime.timedelta
+    """The duration of the time interval."""
+    confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the interval."""
+
+
+class AudioAnalysisBeat(BaseModel):
+    """Audio analysis of a beat. A beat is the basic time unit of a piece of music; for example,
+    each tick of a metronome. Beats are typically multiples of tatums.
+    """
+
+    start: datetime.timedelta
+    """The starting point of the time interval."""
+    duration: datetime.timedelta
+    """The duration of the time interval."""
+    confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the interval."""
+
+
+class AudioAnalysisSection(BaseModel):
+    """Audio analysis of a section. Sections are defined by large variations in rhythm or timbre,
+    e.g. chorus, verse, bridge, guitar solo, etc. Each section contains its own descriptions of
+    [`tempo`][spotify.models.AudioAnalysisSection.tempo],
+    [`key`][spotify.models.AudioAnalysisSection.key],
+    [`mode`][spotify.models.AudioAnalysisSection.mode],
+    [`time_signature`][spotify.models.AudioAnalysisSection.time_signature], and
+    [`loudness`][spotify.models.AudioAnalysisSection.loudness].
+    """
+
+    start: datetime.timedelta
+    """The starting point of the section."""
+    duration: datetime.timedelta
+    """The duration of the section."""
+    confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the section's "designation"."""
+    loudness: float
+    """The overall loudness of the section in decibels (dB). Loudness values are useful for
+    comparing relative loudness of sections within tracks.
+    """
+    tempo: float
+    """The overall estimated tempo of the section in beats per minute (BPM). In musical
+    terminology, tempo is the speed or pace of a given piece and derives directly from the average
+    beat duration.
+    """
+    tempo_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`tempo`][spotify.models.AudioAnalysisSection.tempo]. Some tracks contain tempo changes or
+    sounds which don't contain tempo (like pure speech) which would correspond to a low value in
+    this field.
+    """
+    key: int
+    """The estimated overall key of the section. The values in this field ranging from `0` to `11`
+    mapping to pitches using standard Pitch Class notation (E.g. `0` = C, `1` = C♯/D♭, `2` = D,
+    and so on). If no key was detected, the value is `-1`.
+    """
+    key_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`key`][spotify.models.AudioAnalysisSection.key]. Songs with many key changes may correspond
+    to low values in this field.
+    """
+    mode: enums.TrackMode
+    """Indicates the modality (major or minor) of a section, the type of scale from which its
+    melodic content is derived. Note that the major key (e.g. C major) could more likely be
+    confused with the minor key at 3 semitones lower (e.g. A minor) as both keys carry the same
+    pitches.
+    """
+    mode_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`mode`][spotify.models.AudioAnalysisSection.mode].
+    """
+    time_signature: int
+    """An estimated time signature. The time signature (meter) is a notational convention to
+    specify how many beats are in each bar (or measure). The time signature ranges from `3` to `7`
+    indicating time signatures of "3/4" to "7/4".
+    """
+    time_signature_confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the
+    [`time_signature`][spotify.models.AudioAnalysisSection.time_signature]. Sections with time
+    signature changes may correspond to low values in this field.
+    """
+
+
+class AudioAnalysisSegment(BaseModel):
+    """Audio analysis segment."""
+
+    start: datetime.timedelta
+    """The starting point of the segment."""
+    duration: datetime.timedelta
+    """The duration of the segment."""
+    confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the segmentation. Segments of
+    the song which are difficult to logically segment (e.g: noise) may correspond to low values in
+    this field.
+    """
+    loudness_start: float
+    """The onset loudness of the segment in decibels (dB). Combined with
+    [`loudness_max`][spotify.models.AudioAnalysisSegment.loudness_max] and
+    [`loudness_max_time`][spotify.models.AudioAnalysisSegment.loudness_max_time], these components
+    can be used to describe the "attack" of the segment.
+    """
+    loudness_max: float
+    """The peak loudness of the segment in decibels (dB). Combined with
+    [`loudness_start`][spotify.models.AudioAnalysisSegment.loudness_start] and
+    [`loudness_max_time`][spotify.models.AudioAnalysisSegment.loudness_max_time], these components
+    can be used to describe the "attack" of the segment.
+    """
+    loudness_max_time: float
+    """The segment-relative offset of the segment peak loudness in seconds. Combined with 
+    [`loudness_start`][spotify.models.AudioAnalysisSegment.loudness_start] and
+    [`loudness_max`][spotify.models.AudioAnalysisSegment.loudness_max], these components can be
+    used to describe the "attack" of the
+    segment.
+    """
+    loudness_end: float
+    """The offset loudness of the segment in decibels (dB). This value should be equivalent to the
+    [`loudness_start`][spotify.models.AudioAnalysisSegment.loudness_start] of the following
+    segment.
+    """
+    pitches: list[float]
+    """Pitch content is given by a "chroma" vector, corresponding to the 12 pitch classes C, C♯, D
+    to B, with values ranging from `0` to `1` that describe the relative dominance of every pitch
+    in the chromatic scale. For example a C Major chord would likely be represented by large
+    values of C, E and G (i.e. classes `0`, `4`, and `7`).
+
+    Vectors are normalized to `1` by their strongest dimension, therefore noisy sounds are likely
+    represented by values that are all close to `1`, while pure tones are described by one value at
+    `1` (the pitch) and others near `0`. As can be seen below, the 12 vector indices are a
+    combination of low-power spectrum values at their respective pitch frequencies.
+
+    ![](https://developer.spotify.com/assets/audio/Pitch_vector.png)
+    Image source: [Spotify](https://developer.spotify.com/assets/audio/Pitch_vector.png)
+    """
+    timbre: list[float]
+    """Timbre is the quality of a musical note or sound that distinguishes different types of
+    musical instruments, or voices. It is a complex notion also referred to as sound color,
+    texture, or tone quality, and is derived from the shape of a segment's spectro-temporal
+    surface, independently of pitch and loudness. The timbre feature is a vector that includes 12
+    unbounded values roughly centered around `0`. Those values are high level abstractions of the
+    spectral surface, ordered by degree of importance.
+
+    For completeness however, the first dimension represents the average loudness of the segment;
+    second emphasizes brightness; third is more closely correlated to the flatness of a sound;
+    fourth to sounds with a stronger attack; etc. See an image below representing the 12 basis
+    functions (i.e. template segments).
+
+    ![](https://developer.spotify.com/assets/audio/Timbre_basis_functions.png)
+    Image source: [Spotify](https://developer.spotify.com/assets/audio/Timbre_basis_functions.png)
+    
+    The actual timbre of the segment is best described as a linear combination of these 12 basis
+    functions weighted by the coefficient values: timbre = $c1 \\times b1 + c2 \\times b2 +
+    \\ldots + c12 \\times b12$, where $c1$ to $c12$ represent the 12 coefficients and $b1$ to
+    $b12$ the 12 basis functions as displayed below. Timbre vectors are best used in comparison
+    with each other.
+    """
+
+
+class AudioAnalysisTatum(BaseModel):
+    """Audio analysis tatum. A tatum represents the lowest regular pulse train that a listener
+    intuitively infers from the timing of perceived musical events (segments).
+    """
+
+    start: datetime.timedelta
+    """The starting point of the time interval."""
+    duration: datetime.timedelta
+    """The duration of the time interval."""
+    confidence: float
+    """The confidence, from `0.0` to `1.0`, of the reliability of the interval."""
+
+
+class Category(BaseModel):
+    """A category."""
+
+    href: str
+    """A link to the Web API endpoint returning full details of the category."""
+    icons: list[Image]
+    """The category icon, in various sizes."""
+    id: str
+    """The Spotify category ID of the category."""
     name: str
-    """The name of the author."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Author:
-        return cls(
-            payload["name"],
-        )
+    """The name of the category."""
 
 
-@attrs.frozen
-class Chapter(ModelBase):
-    """A chapter."""
+class SimpleChapter(BaseModel, DurationMS):
+    """A simplified chapter."""
 
     audio_preview_url: str | None
-    """A URL to a 30 second preview (MP3 format) of the chapter. ``None`` if not available."""
+    """A URL to a 30 second preview (MP3 format) of the chapter. [`None`][] if not available."""
+    available_markets: list[str] | None
+    """A list of the countries in which the chapter can be played, identified by their
+    [ISO 3166-1 alpha-2](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) code.
+    """
     chapter_number: int
     """The number of the chapter."""
     description: str
-    """A description of the chapter. HTML tags are stripped away from this field, use the ``html_description`` field in case HTML tags are needed."""
+    """A description of the chapter. HTML tags are stripped away from this field, use the
+    [`html_description`][spotify.models.SimpleChapter.html_description] field in case HTML tags
+    are needed.
+    """
     html_description: str
     """A description of the chapter. This field may contain HTML tags."""
-    duration: datetime.timedelta
+    duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
     """The chapter length."""
     explicit: bool
     """Whether or not the chapter has explicit content."""
     external_urls: ExternalURLs
-    """External URLs for this chapter."""
+    """External URLs for the chapter."""
     href: str
     """A link to the Web API endpoint providing full details of the chapter."""
     id: str
     """The Spotify ID for the chapter."""
     images: list[Image]
     """The cover art for the chapter in various sizes, widest first."""
-    is_playable: bool
-    """True if the chapter is playable in the given market. Otherwise false."""
+    is_playable: bool | None = None
+    """[`True`][] if the chapter is playable in the given market. Otherwise [`False`][]."""
     languages: list[str]
-    """A list of the languages used in the chapter, identified by their `ISO 639-1 code <https://en.wikipedia.org/wiki/ISO_639>`_."""
+    """A list of the languages used in the chapter, identified by their
+    [ISO 639-1 code](https://en.wikipedia.org/wiki/ISO_639).
+    """
     name: str
     """The name of the chapter."""
-    release_date: datetime.datetime
+    release_date: datetime.date | None
     """The date the chapter was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which ``release_date`` value is known."""
+    """The precision with which [`release_date`][spotify.models.SimpleChapter.release_date] value
+    is known.
+    """
     resume_point: ResumePoint | None
-    """The user's most recent position in the chapter. Set if the supplied access token is a user token and has the scope 'user-read-playback-position'."""
+    """The user's most recent position in the chapter.
+    
+    !!! scopes "Required Authorization Scope"
+        [`USER_READ_PLAYBACK_POSITION`][spotify.enums.Scope.USER_READ_PLAYBACK_POSITION].
+    """
     uri: str
     """The Spotify URI for the chapter."""
-    restrictions: Restrictions | None
+    restrictions: Restrictions | None = None
     """Present when a content restriction is applied."""
-    audiobook: Audiobook | None
-    """The audiobook on which this chapter appears. Not present when fetching an audiobook."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Chapter:
-        return cls(
-            payload["audio_preview_url"],
-            payload["chapter_number"],
-            payload["description"],
-            payload["html_description"],
-            datetime.timedelta(milliseconds=payload["duration_ms"]),
-            payload["explicit"],
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload["images"]],
-            payload["is_playable"],
-            payload["languages"],
-            payload["name"],
-            utils.datetime_from_timestamp(payload["release_date"]),
-            enums.ReleaseDatePrecision(payload["release_date_precision"]),
-            ResumePoint.from_payload(res)
-            if (res := payload.get("resume_point"))
-            else None,
-            payload["uri"],
-            Restrictions.from_payload(res)
-            if (res := payload.get("restrictions"))
-            else None,
-            Audiobook.from_payload(aud) if (aud := payload.get("audiobook")) else None,
-        )
 
 
-@attrs.frozen
-class Copyright(ModelBase):
+class Chapter(SimpleChapter):
+    """A chapter."""
+
+    audiobook: SimpleAudiobook
+    """The audiobook on which the chapter appears."""
+
+
+class Copyright(BaseModel):
     """Copyright statements."""
 
     text: str
-    """The copyright text for this content."""
+    """The copyright text for the content."""
     type: enums.CopyrightType
     """The type of copyright."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Copyright:
-        return cls(
-            payload["text"],
-            enums.CopyrightType(payload["type"]),
-        )
+
+class SavedEpisode(BaseModel):
+    """Information about an episode saved to a user's 'Your Music' library."""
+
+    added_at: datetime.datetime
+    """The date and time the episode was saved."""
+    episode: Episode
+    """The episode."""
 
 
-@attrs.frozen
-class Episode(ModelBase):
-    """An episode."""
+class SimpleEpisode(BaseModel, DurationMS):
+    """A simplified episode."""
 
     audio_preview_url: str | None
-    """A URL to a 30 second preview (MP3 format) of the episode. ``None`` if not available."""
+    """A URL to a 30 second preview (MP3 format) of the episode. [`None`][] if not available."""
     description: str
-    """A description of the episode. HTML tags are stripped away from this field, use the ``html_description`` field in case HTML tags are needed."""
+    """A description of the episode. HTML tags are stripped away from this field, use the
+    [`html_description`][spotify.models.SimpleEpisode.html_description] field in case HTML tags
+    are needed.
+    """
     html_description: str
     """A description of the episode. This field may contain HTML tags."""
-    duration: datetime.timedelta
+    duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
     """The episode length."""
     explicit: bool
     """Whether or not the episode has explicit content."""
@@ -783,386 +803,419 @@ class Episode(ModelBase):
     images: list[Image]
     """The cover art for the episode in various sizes, widest first."""
     is_externally_hosted: bool
-    """True if the episode is hosted outside of Spotify's CDN."""
-    is_playable: bool
-    """True if the episode is playable in the given market. Otherwise false."""
+    """[`True`][] if the episode is hosted outside of Spotify's CDN. Otherwise [`False`][]."""
+    is_playable: bool | None = None
+    """[`True`][] if the episode is playable in the given market. Otherwise [`False`][]. May be 
+    [`None`][] in some situations.
+    """
     languages: list[str]
-    """A list of the languages used in the episode, identified by their `ISO 639-1 code <https://en.wikipedia.org/wiki/ISO_639>`_."""
+    """A list of the languages used in the episode, identified by their
+    [ISO 639-1 code](https://en.wikipedia.org/wiki/ISO_639).
+    """
     name: str
     """The name of the episode."""
-    release_date: datetime.datetime
+    release_date: datetime.date
     """The date the episode was first released."""
     release_date_precision: enums.ReleaseDatePrecision
-    """The precision with which ``release_date`` value is known."""
-    resume_point: ResumePoint | None
-    """The user's most recent position in the episode. Set if the supplied access token is a user token and has the scope 'user-read-playback-position'."""
+    """The precision with which [`release_date`][spotify.models.SimpleEpisode.release_date] value 
+    is known.
+    """
+    resume_point: ResumePoint | None = None
+    """The user's most recent position in the episode.
+
+    !!! scopes "Required Authorization Scope"
+        [`USER_READ_PLAYBACK_POSITION`][spotify.enums.Scope.USER_READ_PLAYBACK_POSITION]
+    """
     uri: str
     """The Spotify URI for the episode."""
-    restrictions: Restrictions | None
+    restrictions: Restrictions | None = None
     """Present when a content restriction is applied."""
-    show: Show | None
-    """The show on which this episode appears. Not present when fetching a show."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Episode:
-        return cls(
-            payload["audio_preview_url"],
-            payload["description"],
-            payload["html_description"],
-            datetime.timedelta(milliseconds=payload["duration_ms"]),
-            payload["explicit"],
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload["images"]],
-            payload["is_externally_hosted"],
-            payload["is_playable"],
-            payload["languages"],
-            payload["name"],
-            utils.datetime_from_timestamp(payload["release_date"]),
-            enums.ReleaseDatePrecision(payload["release_date_precision"]),
-            ResumePoint.from_payload(res)
-            if (res := payload.get("resume_point"))
-            else None,
-            payload["uri"],
-            Restrictions.from_payload(res)
-            if (res := payload.get("restrictions"))
-            else None,
-            Show.from_payload(sho) if (sho := payload.get("show")) else None,
-        )
 
 
-@attrs.frozen
-class ExplicitContent(ModelBase):
+class Episode(SimpleEpisode):
+    """An episode."""
+
+    show: SimpleShow
+    """The show on which the episode appears."""
+
+
+class ExplicitContent(BaseModel):
     """Explicit content settings."""
 
     filter_enabled: bool
-    """When ``True``, indicates that explicit content should not be played."""
+    """When [`True`][], indicates that explicit content should not be played."""
     filter_locked: bool
-    """When ``True``, indicates that the explicit content setting is locked and can't be changed by the user."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> ExplicitContent:
-        return cls(
-            payload["filter_enabled"],
-            payload["filter_locked"],
-        )
+    """When [`True`][], indicates that the explicit content setting is locked and can't be changed
+    by the user.
+    """
 
 
-@attrs.frozen
-class ExternalIDs(ModelBase):
+class ExternalIDs(BaseModel):
     """External IDs."""
 
-    isrc: str
-    """`International Standard Recording Code <http://en.wikipedia.org/wiki/International_Standard_Recording_Code/>`_"""
-    ean: str | None
-    """`International Article Number <https://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29>`_"""
-    upc: str | None
-    """`Universal Product Code <http://en.wikipedia.org/wiki/Universal_Product_Code>`_"""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> ExternalIDs:
-        return cls(
-            payload["isrc"],
-            payload.get("ean"),
-            payload.get("upc"),
-        )
+    isrc: str | None = None
+    """[International Standard Recording Code](http://en.wikipedia.org/wiki/International_Standard_Recording_Code)."""
+    ean: str | None = None
+    """[International Article Number](https://en.wikipedia.org/wiki/International_Article_Number_%28EAN%29)."""
+    upc: str | None = None
+    """[Universal Product Code](http://en.wikipedia.org/wiki/Universal_Product_Code)."""
 
 
-@attrs.frozen
-class ExternalURLs(ModelBase):
-    """External URLs"""
+class ExternalURLs(BaseModel):
+    """External URLs."""
 
-    spotify: str
+    spotify: str | None
     """The Spotify URL for the object."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> ExternalURLs:
-        return cls(payload["spotify"])
 
-
-@attrs.frozen
-class Followers(ModelBase):
+class Followers(BaseModel):
     """Information about followers."""
 
-    href: str
-    """This will always be set to ``None``, as the Web API does not support it at the moment."""
+    href: str | None
+    """This will always be set to [`None`][], as the Spotify Web API does not support it at the moment."""
     total: int
     """The total number of followers."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Followers:
-        return cls(
-            payload["href"],
-            payload["total"],
-        )
 
-
-@attrs.frozen
-class Image(ModelBase):
+class Image(BaseModel):
     """An image."""
 
     url: str
     """The source URL of the image."""
-    height: int
+    height: int | None
     """The image height in pixels."""
-    width: int
+    width: int | None
     """The image width in pixels."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Image:
-        return cls(
-            payload["url"],
-            payload["height"],
-            payload["width"],
-        )
 
-
-@attrs.frozen
-class Narrator(ModelBase):
-    """Author information."""
+class Narrator(BaseModel):
+    """Narrator information."""
 
     name: str
     """The name of the narrator."""
 
+
+class PlayerTrack(BaseModel):
+    """Information about the user's currently playing item."""
+
+    context: Context | None
+    """Limited information about the currently playing item."""
+    timestamp: datetime.datetime
+    """Time when playback state was last changed (play, pause, skip, scrub, new song, etc.)."""
+    progress: datetime.timedelta | None = pydantic.Field(alias="progress_ms")
+    """Progress into the currently playing track or episode."""
+    is_playing: bool
+    """[`True`][] if something is currently playing."""
+    item: TrackWithSimpleArtist | Episode | None
+    """The currently playing track or episode."""
+    currently_playing_type: enums.PlayingType
+    """The type of the currently playing item."""
+    actions: Actions
+    """Actions available to control playback."""
+
+    @pydantic.field_validator("currently_playing_type", mode="before", check_fields=False)
     @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Narrator:
-        return cls(
-            payload["name"],
-        )
+    def currently_playing_type_validator(cls, v: str) -> str:
+        return v if v in ("track", "episode", "ad") else "unknown"
 
-
-@attrs.frozen
-class Recommendation(ModelBase):
-    """Recommendations."""
-
-    seeds: list[RecommendationSeed]
-    """A list of recommendation seed objects."""
-    tracks: list[RecommendationTrack]
-    """A list of simplified track objects."""
-
+    @pydantic.field_validator("progress", mode="before", check_fields=False)
     @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Recommendation:
-        return cls(
-            [RecommendationSeed.from_payload(see) for see in payload["seeds"]],
-            [RecommendationTrack.from_payload(tra) for tra in payload["tracks"]],
-        )
+    def progress_validator(cls, v: int) -> float:
+        return v / 1000
 
 
-@attrs.frozen
-class RecommendationSeed(ModelBase):
-    """A recommendation seed."""
+class Player(PlayerTrack):
+    """Information about the user's current playback state."""
 
-    after_filtering_size: int
-    """The number of tracks available after min and max filters have been applied."""
-    after_relinking_size: int
-    """The number of tracks available after relinking for regional availability."""
-    href: str | None
-    """A link to the full track or artist data for this seed.
-    For tracks this will be a link to a Track Object.
-    For artists a link to an Artist Object.
-    For genre seeds, this value will be ``None``."""
-    id: str
-    """The id used to select this seed. This will be the same as the string used in the ``seed_artists``, ``seed_tracks`` or
-    ``seed_genres`` parameter."""
-    initial_pool_size: int
-    """The number of recommended tracks available for this seed."""
+    device: Device
+    """The device that is currently active."""
+    repeat_state: enums.RepeatState
+    """Whether or not a repeat is applied to the playback state."""
+    shuffle_state: bool
+    """Whether or not shuffle is applied to the playback state."""
+
+
+class Device(BaseModel):
+    """Information about a playback device."""
+
+    id: str | None
+    """The device ID. This ID is unique and persistent to some extent. However, this is not 
+    guaranteed and any cached device [`id`][spotify.models.Device.id] should periodically be
+    cleared out and re-fetched as necessary.
+    """
+    is_active: bool
+    """If this device is the currently active device."""
+    is_private_session: bool
+    """If this device is currently in a private session."""
+    is_restricted: bool
+    """Whether controlling this device is restricted. At present if this is [`True`][] then no Web
+    API commands will be accepted by this device.
+    """
+    name: str
+    """A human-readable name for the device. Some devices have a name that the user can configure
+    (e.g. "Loudest speaker") and some devices have a generic name associated with the manufacturer
+    or device model.
+    """
     type: str
-    """The entity type of this seed. One of ``artist``, ``track`` or ``genre``."""
+    """Device type, such as "computer", "smartphone" or "speaker".
+    
+    !!! note
+        I did not add an enum for this field as there no official list of values.
+        [This](https://github.com/spotify/web-api/issues/687#issuecomment-358783650) list from
+        2018 exists, but I don't trust that it is up to date and contains all available devices.
+    """
+    volume_percent: int | None
+    """The current volume in percent."""
+    supports_volume: bool
+    """If this device can be used to set the volume."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> RecommendationSeed:
-        return cls(
-            payload["afterFilteringSize"],
-            payload["afterRelinkingSize"],
-            payload["href"],
-            payload["id"],
-            payload["initialPoolSize"],
-            payload["type"],
-        )
 
+class Context(BaseModel):
+    """Limited information about the currently playing item."""
 
-@attrs.frozen
-class RecommendationTrack(ModelBase):
-    """A recommendation track."""
-
-    # TODO: It appears album and other fields *are* included with recommendations.
-
-    artists: list[RecommendationArtist]
-    """The artists who performed the track."""
-    available_markets: list[str] | None
-    """A list of the countries in which the track can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-    Returns ``None`` if a market was specified in the request."""
-    disc_number: int
-    """The disc number (usually ``1`` unless the album consists of more than one disc)."""
-    duration: datetime.timedelta
-    """The track length."""
-    explicit: bool
-    """Whether or not the track has explicit lyrics."""
-    external_urls: ExternalURLs
-    """Known external URLs for this track."""
+    type: enums.ContextType
+    """The item type."""
     href: str
-    """A link to the Web API endpoint providing full details of the track."""
-    id: str
-    """The Spotify ID for the track."""
-    is_playable: bool | None
-    """Whether or not the track is playable in the given market.
-    Present when `Track Relinking <https://developer.spotify.com/documentation/general/guides/track-relinking-guide/>`_ is applied."""
-    linked_from: RecommendationTrack | None
-    """Present when `Track Relinking <https://developer.spotify.com/documentation/general/guides/track-relinking-guide/>`_ is applied, and the requested track has been replaced with a different track.
-    The track in the linked_from object contains information about the originally requested track."""
-    restrictions: Restrictions | None
-    """Present when restrictions are applied to the track."""
-    name: str
-    """The name of the track."""
-    preview_url: str | None
-    """A link to a 30 second preview (MP3 format) of the track. Can be ``None``"""
-    track_number: int
-    """The number of the track. If an album has several discs, the track number is the number on the specified disc."""
+    """A link to the Web API endpoint providing full details of the item."""
+    external_urls: ExternalURLs
+    """External URLs for this context."""
     uri: str
-    """The Spotify URI for the track."""
+    """The Spotify URI for the context."""
+
+
+class Actions(BaseModel):
+    """Actions available to control playback."""
+
+    interrupting_playback: bool | None = None
+    """Interrupting playback."""
+    pausing: bool | None = None
+    """Pausing."""
+    resuming: bool | None = None
+    """Resuming."""
+    seeking: bool | None = None
+    """Seeking playback position."""
+    skipping_next: bool | None = None
+    """Skipping to the next context."""
+    skipping_prev: bool | None = None
+    """Skipping to the previous context."""
+    toggling_repeat_context: bool | None = None
+    """Toggling repeat context flag."""
+    toggling_shuffle: bool | None = None
+    """Toggling shuffle flag."""
+    toggling_repeat_track: bool | None = None
+    """Toggling repeat track flag."""
+    transferring_playback: bool | None = None
+    """Transferring playback between devices."""
+
+
+class PlayHistory(BaseModel):
+    """Information about a track on a user's play history."""
+
+    track: TrackWithSimpleArtist
+    """The track the user listened to."""
+    played_at: datetime.datetime
+    """The date and time the track was played."""
+    context: Context
+    """The context the track was played from."""
+
+
+class Queue(BaseModel):
+    """Information about a user's queue."""
+
+    currently_playing: Track | Episode | None
+    """The currently playing track or episode."""
+    queue: list[Track | Episode]
+    """The tracks or episodes in the queue."""
+
+
+class SimplePlaylist(BaseModel):
+    """A simplified playlist."""
+
+    collaborative: bool
+    """[`True`][] if the owner allows other users to modify the playlist."""
+    description: str | None
+    """The playlist description. Only returned for modified, verified playlists, otherwise [`None`][]."""
+    external_urls: ExternalURLs
+    """Known external URLs for the playlist."""
+    href: str
+    """A link to the Web API endpoint providing full details of the playlist."""
+    id: str
+    """The Spotify ID for the playlist."""
+    images: list[Image]
+    """Images for the playlist."""
+    name: str
+    """The name of the playlist."""
+    owner: User
+    """The user who owns the playlist."""
+    public: bool | None
+    """The playlist's public/private status.
+
+    * [`True`][] if the playlist is public.
+    * [`False`][] if the playlist is private.
+    * [`None`][] if the playlist status is not relevant.
+    """
+    snapshot_id: str
+    """The version identifier for the current playlist. Can be supplied in other requests to
+    target a specific playlist version.
+    """
+    tracks: PlaylistTracks
+    """Link to the playlist's tracks."""
+    uri: str
+    """The Spotify URI for the playlist."""
+
+
+class Playlist(SimplePlaylist):
+    """A playlist."""
+
+    followers: Followers
+    """Information about the followers of the playlist."""
+    tracks: Paginator[PlaylistItem]  # pyright: ignore[reportIncompatibleVariableOverride]
+    """The tracks of the playlist."""
+
+
+class PlaylistTracks(BaseModel):
+    """Link to the Web API endpoint where full details of the playlist's tracks can be retrieved,
+    along with the total number of tracks in the playlist. Note, a track object may be [`None`][].
+    This can happen if a track is no longer available.
+    """
+
+    href: str
+    """A link to the Web API endpoint where full details of the playlist's tracks can be retrieved."""
+    total: int
+    """Number of tracks in the playlist."""
+
+
+class PlaylistItem(BaseModel):
+    """A playlist item."""
+
+    added_at: datetime.datetime | None
+    """The date and time the track or episode was added.
+    
+    !!! note
+        Some very old playlists may return [`None`][] in this field.
+    """
+    added_by: SimpleUser | None
+    """The Spotify user who added the track or episode.
+    
+    !!! note
+        Some very old playlists may return [`None`][] in this field.
+    """
     is_local: bool
-    """Whether or not the track is from a local file."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> RecommendationTrack:
-        return cls(
-            [RecommendationArtist.from_payload(art) for art in payload["artists"]],
-            payload.get("available_markets"),
-            payload["disc_number"],
-            datetime.timedelta(milliseconds=payload["duration_ms"]),
-            payload["explicit"],
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            payload.get("is_playable"),
-            RecommendationTrack.from_payload(tra)
-            if (tra := payload.get("linked_from"))
-            else None,
-            Restrictions.from_payload(res)
-            if (res := payload.get("restrictions"))
-            else None,
-            payload["name"],
-            payload["preview_url"],
-            payload["track_number"],
-            payload["uri"],
-            payload["is_local"],
-        )
+    """Whether this track or episode is a local file or not."""
+    item: TrackWithSimpleArtist | Episode | None
+    """Information about the track or episode."""
 
 
-@attrs.frozen
-class RecommendationArtist(ModelBase):
-    """A recommendation artist."""
+class Playlists(BaseModel):
+    """A set of playlists."""
 
-    external_urls: ExternalURLs
-    """Known external URLs for this artist."""
+    message: str
+    """The localized message of a playlist. e.g. 'Popular Playlists'"""
+    playlists: Paginator[SimplePlaylist]
+    """The playlists in the set."""
+
+
+class BasePaginator(
+    BaseModel,
+    typing.Generic[T],
+):
+    """A paginator with helpful methods to iterate through large amounts of content."""
+
     href: str
-    """A link to the Web API endpoint providing full details of the artist."""
-    id: str
-    """The Spotify ID for the artist."""
-    name: str
-    """The name of the artist."""
-    uri: str
-    """The Spotify URI for the artist."""
+    """A link to the Web API endpoint returning the full result of the request."""
+    limit: int
+    """The maximum number of items in the response."""
+    next: str | None
+    """URL to the next page of items."""
+    total: int
+    """The total number of items available to return."""
+    items: list[T]
+    """The requested content."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> RecommendationArtist:
-        return cls(
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            payload["name"],
-            payload["uri"],
-        )
+    # TODO: add abstract methods here which are covered in the subclasses
 
 
-@attrs.frozen
-class Restrictions(ModelBase):
+class Paginator(BasePaginator[T]):
+    """A basic paginator."""
+
+    offset: int
+    """The offset of the items returned."""
+    previous: str | None
+    """URL to the previous page of items."""
+
+
+class CursorPaginator(BasePaginator[T]):
+    """A paginator using cursors to paginate the content."""
+
+    cursors: Cursors
+    """The cursors used to find the next set of items."""
+    total: int | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+    """The total number of items available to return."""
+
+
+class Cursors(BaseModel):
+    """Cursors used to find the next/previous set of items in a paginator."""
+
+    after: str | None = None
+    """The cursor to use as key to find the next page of items."""
+    before: str | None = None
+    """The cursor to use as key to find the previous page of items."""
+
+
+class Restrictions(BaseModel):
     """Content restrictions."""
 
     reason: enums.Reason
     """The reason for the restriction."""
 
+    @pydantic.field_validator("reason", mode="before", check_fields=False)
     @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Restrictions:
-        return cls(
-            enums.Reason.from_payload(payload["reason"]),
-        )
+    def reason_validator(cls, v: str) -> str:
+        return v if v in ("market", "product", "explicit", "payment_required") else "unknown"
 
 
-@attrs.frozen
-class ResumePoint(ModelBase):
+class ResumePoint(BaseModel):
     """Resume point information."""
 
     fully_played: bool
     """Whether or not the episode has been fully played by the user."""
-    resume_position: datetime.timedelta
+    resume_position: datetime.timedelta = pydantic.Field(alias="resume_position_ms")
     """The user's most recent position in the episode."""
 
+    @pydantic.field_validator("resume_position", mode="before", check_fields=False)
     @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> ResumePoint:
-        return cls(
-            payload["fully_played"],
-            datetime.timedelta(milliseconds=payload["resume_position_ms"]),
-        )
+    def resume_position_validator(cls, v: int) -> float:
+        return v / 1000
 
 
-@attrs.frozen
-class Paginator(
-    ModelBase,
-    typing.Generic[ModelT],
-):
-    """A paginator with helpful methods to paginate
-    through large amounts of content.
+class SavedShow(BaseModel):
+    """Information about a show saved to a user's 'Your Music' library."""
 
-    TODO: make those 'helpful methods'"""
-
-    href: str
-    """A link to the Web API endpoint returning the full result of the request."""
-    items: list[ModelT]
-    """The requested content."""
-    limit: int
-    """The maximum number of items in the response."""
-    next: str | None
-    """URL to the next page of items."""
-    offset: int
-    """The offset of the items returned."""
-    previous: str | None
-    """URL to the previous page of items."""
-    total: int
-    """The total number of items available to return."""
-
-    @classmethod
-    def from_payload(
-        cls, payload: dict[str, typing.Any], item_type: typing.Type[ModelT]
-    ) -> Paginator[ModelT]:
-        return cls(
-            payload["href"],
-            [item_type.from_payload(itm) for itm in payload["items"]],
-            payload["limit"],
-            payload["next"],
-            payload["offset"],
-            payload["previous"],
-            payload["total"],
-        )
+    added_at: datetime.datetime
+    """The date and time the show was saved."""
+    show: SimpleShow
+    """The show."""
 
 
-@attrs.frozen
-class Show(ModelBase):
-    """A show."""
+class SimpleShow(BaseModel):
+    """A simplified show."""
 
     available_markets: list[str]
-    """A list of the countries in which the show can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_."""
+    """A list of the countries in which the show can be played, identified by their
+    [ISO 3166-1 alpha-2 code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+    """
     copyrights: list[Copyright]
     """The copyright statements of the show."""
     description: str
-    """A description of the show. HTML tags are stripped away from this field, use the ``models.Show.html_description`` field in case HTML tags are needed."""
+    """A description of the show. HTML tags are stripped away from this field, use the
+    [`html_description`][spotify.models.Show.html_description] field in case HTML tags are needed.
+    """
     html_description: str
     """A description of the show. This field may contain HTML tags."""
     explicit: bool
     """Whether or not the show has explicit content."""
     external_urls: ExternalURLs
-    """External URLs for this show."""
+    """External URLs for the show."""
     href: str
     """A link to the Web API endpoint providing full details of the show."""
     id: str
@@ -1170,9 +1223,13 @@ class Show(ModelBase):
     images: list[Image]
     """The cover art for the show in various sizes, widest first."""
     is_externally_hosted: bool | None
-    """True if all of the shows episodes are hosted outside of Spotify's CDN. This field might be ``None`` in some cases."""
+    """[`True`][] if all of the shows episodes are hosted outside of Spotify's CDN. This field might be
+    [`None`][] in some cases.
+    """
     languages: list[str]
-    """A list of the languages used in the show, identified by their `ISO 639 <https://en.wikipedia.org/wiki/ISO_639>`_ code."""
+    """A list of the languages used in the show, identified by their 
+    [ISO 639 code](https://en.wikipedia.org/wiki/ISO_639).
+    """
     media_type: str
     """The media type of the show."""
     name: str
@@ -1181,154 +1238,238 @@ class Show(ModelBase):
     """The publisher of the show."""
     uri: str
     """The Spotify URI for the show."""
-    episodes: Paginator[Episode] | None
-    """The episodes of the show. Not available when fetching several shows or fetching a specific episode."""
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Show:
-        return cls(
-            payload["available_markets"],
-            [Copyright.from_payload(cop) for cop in payload["copyrights"]],
-            payload["description"],
-            payload["html_description"],
-            payload["explicit"],
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload["images"]],
-            payload["is_externally_hosted"],
-            payload["languages"],
-            payload["media_type"],
-            payload["name"],
-            payload["publisher"],
-            payload["uri"],
-            Paginator.from_payload(eps, Episode)
-            if (eps := payload.get("episodes"))
-            else None,
-        )
+    total_episodes: int
+    """The total number of episodes in the show."""
 
 
-@attrs.frozen
-class Track(ModelBase):
-    """A track."""
+class Show(SimpleShow):
+    """A show."""
 
-    album: Album | None
-    """The album on which the track appears. Will be ``None`` when fetching an album's tracks."""
-    artists: list[Artist]
-    """The artists who performed the track."""
-    available_markets: list[str] | None
-    """A list of the countries in which the track can be played, identified by their `ISO 3166-1 alpha-2 code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_.
-    Returns ``None`` if a market was specified in the request."""
-    disc_number: int
-    """The disc number (usually ``1`` unless the album consists of more than one disc)."""
-    duration: datetime.timedelta
-    """The track length."""
-    explicit: bool
-    """Whether or not the track has explicit lyrics."""
-    external_ids: ExternalIDs | None
-    """Known external IDs for the track."""
+    episodes: Paginator[SimpleEpisode]
+    """The episodes of the show."""
+
+
+class SearchResult(BaseModel):
+    """A search result."""
+
+    tracks: Paginator[TrackWithSimpleArtist] | None = None
+    """Returned tracks."""
+    artists: Paginator[Artist] | None = None
+    """Returned artists."""
+    albums: Paginator[SimpleAlbum] | None = None
+    """Returned albums."""
+    playlists: Paginator[SimplePlaylist] | None = None
+    """Returned playlists."""
+    # NOTE: the unique `SimpleShow | None` below is to ignore/bypass an error caused by the
+    # spotify API where it returns `null` objects instead of `Show` objects
+    shows: Paginator[SimpleShow | None] | None = None
+    """Returned shows."""
+    episodes: Paginator[SimpleEpisode] | None = None
+    """Returned episodes."""
+    audiobooks: Paginator[SimpleAudiobook] | None = None
+    """Returned audiobooks."""
+
+
+class SavedTrack(BaseModel):
+    """Information about a track saved to a user's 'Your Music' library."""
+
+    added_at: datetime.datetime
+    """The date and time the track was saved."""
+    track: TrackWithSimpleArtist
+    """The track."""
+
+
+class LinkedFromTrack(BaseModel):
+    """Information about the originally requested track when
+    [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking)
+    is applied.
+    """
+
     external_urls: ExternalURLs
-    """Known external URLs for this track."""
+    """Known external URLs for the track."""
     href: str
     """A link to the Web API endpoint providing full details of the track."""
     id: str
     """The Spotify ID for the track."""
-    is_playable: bool | None
-    """Whether or not the track is playable in the given market.
-    Present when `Track Relinking <https://developer.spotify.com/documentation/general/guides/track-relinking-guide/>`_ is applied."""
-    linked_from: Track | None
-    """Present when `Track Relinking <https://developer.spotify.com/documentation/general/guides/track-relinking-guide/>`_ is applied, and the requested track has been replaced with a different track.
-    The track in the linked_from object contains information about the originally requested track."""
-    restrictions: Restrictions | None
+    uri: str
+    """The Spotify URI for the track."""
+
+
+class TrackBase(LinkedFromTrack, DurationMS, typing.Generic[ArtistT]):
+    """Base class for a track."""
+
+    artists: list[ArtistT]
+    """The artists who performed the track."""
+    available_markets: list[str] | None = None
+    """A list of the countries in which the track can be played, identified by their
+    [ISO 3166-1 alpha-2 code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+    """
+    disc_number: int
+    """The disc number (usually `1` unless the album consists of more than one disc)."""
+    duration: datetime.timedelta = pydantic.Field(alias="duration_ms")
+    """The track length."""
+    explicit: bool
+    """Whether or not the track has explicit lyrics."""
+    is_playable: bool | None = None
+    """Whether or not the track is playable in the given market. Present when
+    [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking)
+    is applied.
+    """
+    linked_from: LinkedFromTrack | None = None
+    """Present when
+    [Track Relinking](https://developer.spotify.com/documentation/web-api/concepts/track-relinking)
+    is applied, and the requested track has been replaced with a different track. The track in the
+    [`linked_from`][spotify.models.TrackBase.linked_from] object contains information about the
+    originally requested track.
+    """
+    restrictions: Restrictions | None = None
     """Present when restrictions are applied to the track."""
     name: str
     """The name of the track."""
-    popularity: int | None
-    """The popularity of the track. The value will be between 0 and 100, with 100 being the most popular."""
     preview_url: str | None
-    """A link to a 30 second preview (MP3 format) of the track. Can be ``None``"""
+    """A link to a 30 second preview (MP3 format) of the track. Can be [`None`][]."""
     track_number: int
-    """The number of the track. If an album has several discs, the track number is the number on the specified disc."""
-    uri: str
-    """The Spotify URI for the track."""
+    """The number of the track. If an album has several discs, the track number is the number on
+    the specified disc.
+    """
     is_local: bool
     """Whether or not the track is from a local file."""
 
-    @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> Track:
-        return cls(
-            Album.from_payload(alb) if (alb := payload.get("album")) else None,
-            [Artist.from_payload(art) for art in payload["artists"]],
-            payload.get("available_markets"),
-            payload["disc_number"],
-            datetime.timedelta(milliseconds=payload["duration_ms"]),
-            payload["explicit"],
-            ExternalIDs.from_payload(ext)
-            if (ext := payload.get("external_ids"))
-            else None,
-            ExternalURLs.from_payload(payload["external_urls"]),
-            payload["href"],
-            payload["id"],
-            payload.get("is_playable"),
-            Track.from_payload(tra) if (tra := payload.get("linked_from")) else None,
-            Restrictions.from_payload(res)
-            if (res := payload.get("restrictions"))
-            else None,
-            payload["name"],
-            payload.get("popularity"),
-            payload["preview_url"],
-            payload["track_number"],
-            payload["uri"],
-            payload["is_local"],
-        )
+
+class SimpleTrack(TrackBase[SimpleArtist]):
+    """A simplified track."""
 
 
-@attrs.frozen
-class User(ModelBase):
-    """A user."""
+class FullTrack(TrackBase[ArtistT], typing.Generic[ArtistT]):
+    """A track class with all available track attributes."""
 
-    country: str | None
-    """The country of the user, as set in the user's account profile. An `ISO 3166-1 alpha-2 country code <http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>`_. This field is only available when the current user has granted access to the ``user-read-private`` scope."""
-    display_name: str | None
-    """The name displayed on the user's profile. ``None`` if not available."""
-    email: str | None
-    """The user's email address, as entered by the user when creating their account.
-    This field is only available when the current user has granted access to the user-read-email scope.
-    
-    .. warning::
+    album: SimpleAlbum
+    """The album on which the track appears."""
+    external_ids: ExternalIDs
+    """Known external IDs for the track."""
+    popularity: int
+    """The popularity of the track. The value will be between `0` and `100`, with `100` being the
+    most popular.
+    """
 
-        This email address is unverified; there is no proof that it actually belongs to the user."""
-    explicit_content: ExplicitContent | None
-    """The user's explicit content settings. This field is only available when the current user has granted access to the user-read-private scope."""
+
+class Track(FullTrack[Artist]):
+    """A track."""
+
+
+class TrackWithSimpleArtist(FullTrack[SimpleArtist]):
+    """A track where the [`artist`][spotify.models.TrackWithSimpleArtist.artist] field is a
+    [`SimpleArtist`][spotify.models.SimpleArtist] object.
+    """
+
+
+class SimpleUser(BaseModel):
+    """A simplified user."""
+
     external_urls: ExternalURLs
-    """Known external URLs for this user."""
-    followers: Followers
+    """Known external URLs for the user."""
+    followers: Followers | None = None
     """Information about the followers of the user."""
     href: str
-    """A link to the Web API endpoint for this user."""
+    """A link to the Web API endpoint for the user."""
     id: str
     """The Spotify user ID for the user."""
-    images: list[Image]
-    """The user's profile image."""
-    product: str | None
-    """The user's Spotify subscription level: "premium", "free", etc. (The subscription level "open" can be considered the same as "free".) This field is only available when the current user has granted access to the user-read-private scope."""
     uri: str
     """The Spotify URI for the user."""
 
+
+class User(SimpleUser):
+    """A user."""
+
+    display_name: str | None
+    """The name displayed on the user's profile. [`None`][] if not available."""
+
+
+class OwnUser(User):
+    """A user with additional information."""
+
+    country: str | None = None
+    """The country of the user, as set in the user's account profile. An
+    [ISO 3166-1 alpha-2 country code](http://en.wikipedia.org/wiki/ISO_3166-1_alpha-2).
+    This field is only available when the current user has granted access to the
+    [`USER_READ_PRIVATE`][spotify.enums.Scope.USER_READ_PRIVATE] scope.
+    """
+    email: str | None = None
+    """The user's email address, as entered by the user when creating their account.
+    This field is only available when the current user has granted access to the
+    [`USER_READ_EMAIL`][spotify.enums.Scope.USER_READ_EMAIL] scope.
+    
+    !!! warning 
+        This email address is unverified; there is no proof that it actually belongs to the user.
+    """
+    explicit_content: ExplicitContent | None = None
+    """The user's explicit content settings. This field is only available when the current user
+    has granted access to the [`USER_READ_PRIVATE`][spotify.enums.Scope.USER_READ_PRIVATE] scope.
+    """
+    images: list[Image]
+    """The user's profile image."""
+    product: enums.SubscriptionLevel | None = None
+    """The user's Spotify subscription level. This field is only available when the current user
+    has granted access to the [`USER_READ_PRIVATE`][spotify.enums.Scope.USER_READ_PRIVATE] scope.
+    """
+
+    @pydantic.field_validator("product", mode="before", check_fields=False)
     @classmethod
-    def from_payload(cls, payload: dict[str, typing.Any]) -> User:
-        return cls(
-            payload.get("country"),
-            payload.get("display_name"),
-            payload.get("email"),
-            ExplicitContent.from_payload(exp)
-            if (exp := payload.get("explicit_content"))
-            else None,
-            ExternalURLs.from_payload(payload["external_urls"]),
-            Followers.from_payload(payload["followers"]),
-            payload["href"],
-            payload["id"],
-            [Image.from_payload(im) for im in payload["images"]],
-            payload.get("product"),
-            payload["uri"],
-        )
+    def product_validator(cls, v: str) -> str:
+        return "free" if v == "open" else v
+
+
+class Recommendations(BaseModel):
+    """Recommendations."""
+
+    seeds: list[RecommendationSeed]
+    """A list of recommendation seeds."""
+    tracks: list[Track]
+    """A list of tracks."""
+
+
+class RecommendationSeed(BaseModel):
+    """A recommendation seed."""
+
+    after_filtering_size: int
+    """The number of tracks available after `min` and `max` filters have been applied."""
+    after_relinking_size: int
+    """The number of tracks available after relinking for regional availability."""
+    href: str | None
+    """A link to the full track or artist data for the seed.
+    
+    * For tracks this will be a link to a [`Track`][spotify.models.Track] object.
+    * For artists a link to an [`Artist`][spotify.models.Artist] object.
+    * For genre seeds, this value will be [`None`][].
+    """
+    id: str
+    """The id used to select the seed. This will be the same as the string used in the
+    `seed_artists`, `seed_tracks` or `seed_genres`
+    [parameter][spotify.api.API.get_recommendations]."""
+    initial_pool_size: int
+    """The number of recommended tracks available for the seed."""
+    type: enums.RecommendationSeedType
+    """The entity type of the seed."""
+
+
+# MIT License
+#
+# Copyright (c) 2022-present novanai
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.

@@ -1,0 +1,10 @@
+::: spotify.models.Copyright
+::: spotify.models.ExternalIDs
+::: spotify.models.ExternalURLs
+::: spotify.models.Followers
+::: spotify.models.Image
+::: spotify.models.Paginator
+::: spotify.models.CursorPaginator
+::: spotify.models.Cursors
+::: spotify.models.Restrictions
+::: spotify.models.ResumePoint

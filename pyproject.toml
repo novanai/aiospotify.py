@@ -1,0 +1,57 @@
+[project]
+name = "aiospotify.py"
+dynamic = ["version"]
+authors = [ { name="novanai" } ]
+description = "An asynchronous Python 3.10+ Spotify Web API wrapper."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "aiohttp==3.9.5",
+  "pydantic==2.8.2",
+]
+keywords = ["spotify", "api", "async", "asynchronous"]
+classifiers = [
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+]
+license = {file = "LICENSE"}
+
+[project.optional-dependencies]
+dev = ["nox==2024.4.15"]
+"dev.format" = ["ruff==0.5.4"]
+"dev.typecheck" = ["pyright==1.1.373"]
+"dev.release" = ["flit==3.9.0"]
+"dev.docs" = [
+  "mkdocs==1.6.0",
+  "mkdocs-material==9.5.30",
+  "mkdocs-minify-plugin==0.8.0",
+  "mkdocstrings-python==1.10.5",
+]
+
+[project.urls]
+Documentation = "https://aiospotifypy.readthedocs.io/en/latest/"
+Repository = "https://github.com/novanai/aiospotify.py"
+Issues = "https://github.com/novanai/aiospotify.py/issues"
+
+[build-system]
+requires = ["flit_core>=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.module]
+name = "spotify"
+
+[tool.setuptools.dynamic]
+version = {attr = "spotify.__version__"}
+
+[tool.ruff]
+exclude = ["docs", "site"]
+line-length = 99
+target-version = "py310"
+
+[tool.pyright]
+strict = ["spotify"]
