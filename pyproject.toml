@@ -33,7 +33,7 @@ dev = ["nox==2024.4.15"]
 ]
 
 [project.urls]
-Documentation = "https://aiospotifypy.readthedocs.io/en/latest/"
+Documentation = "https://aiospotifypy.readthedocs.io/en/stable/"
 Repository = "https://github.com/novanai/aiospotify.py"
 Issues = "https://github.com/novanai/aiospotify.py/issues"
 
