@@ -7,6 +7,11 @@ import pydantic
 
 from spotify import enums, utils
 
+if typing.TYPE_CHECKING:
+    from spotify import api
+
+from collections.abc import AsyncGenerator
+
 __all__: typing.Sequence[str] = (
     "SavedAlbum",
     "SimpleAlbum",
@@ -51,7 +56,6 @@ __all__: typing.Sequence[str] = (
     "PlaylistTracks",
     "PlaylistItem",
     "Playlists",
-    "BasePaginator",
     "Paginator",
     "CursorPaginator",
     "Cursors",
@@ -79,7 +83,7 @@ T = typing.TypeVar("T")
 
 
 class BaseModel(pydantic.BaseModel):
-    # Occasionally, this value for this field is upper case, so we convert it to lower case
+    # Occasionally, the value for this field is upper case and must be converted to lower case
     @pydantic.field_validator("album_type", mode="before", check_fields=False)
     @classmethod
     def album_type_validator(cls, v: str):
@@ -1015,7 +1019,7 @@ class PlayHistory(BaseModel):
     """The track the user listened to."""
     played_at: datetime.datetime
     """The date and time the track was played."""
-    context: Context
+    context: Context | None
     """The context the track was played from."""
 
 
@@ -1102,7 +1106,7 @@ class PlaylistItem(BaseModel):
     """
     is_local: bool
     """Whether this track or episode is a local file or not."""
-    item: TrackWithSimpleArtist | Episode | None
+    item: TrackWithSimpleArtist | Episode | None = pydantic.Field(alias="track")
     """Information about the track or episode."""
 
 
@@ -1121,6 +1125,9 @@ class BasePaginator(
 ):
     """A paginator with helpful methods to iterate through large amounts of content."""
 
+    _api: api.API
+    _item_type: type[T]
+
     href: str
     """A link to the Web API endpoint returning the full result of the request."""
     limit: int
@@ -1132,7 +1139,33 @@ class BasePaginator(
     items: list[T]
     """The requested content."""
 
-    # TODO: add abstract methods here which are covered in the subclasses
+    @classmethod
+    def from_payload(cls, data: bytes, api_class: api.API, item_type: type[T]) -> typing.Self:
+        obj = cls.model_validate_json(data)
+        obj._api = api_class
+        obj._item_type = item_type
+        return obj
+
+    async def lazy_iter_items(self) -> AsyncGenerator[T]:
+        """Iterate over all the items of the paginator, starting from the currently fetched items.
+
+        Example
+        -------
+        ```py
+        async for item in paginator.lazy_iter_items():
+            print(item.name)
+        ```
+        """
+        for item in self.items:
+            yield item
+
+        while self.next is not None:
+            data = await self._api.get(self.next)
+            assert data is not None
+            self = type(self).from_payload(data, self._api, self._item_type)
+
+            for item in self.items:
+                yield item
 
 
 class Paginator(BasePaginator[T]):
@@ -1147,7 +1180,7 @@ class Paginator(BasePaginator[T]):
 class CursorPaginator(BasePaginator[T]):
     """A paginator using cursors to paginate the content."""
 
-    cursors: Cursors
+    cursors: Cursors | None
     """The cursors used to find the next set of items."""
     total: int | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
     """The total number of items available to return."""
