@@ -5,6 +5,12 @@ An asynchronous Python 3.10+ Spotify Web API wrapper.
 * **Documentation:** <https://aiospotifypy.readthedocs.io/en/stable/>
 * **Examples**: <https://github.com/novanai/aiospotify.py/tree/master/examples>
 
+## Installation
+
+```bash
+pip install -U aiospotify.py
+```
+
 ## Getting Started
 
 ```py

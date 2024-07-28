@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import typing
+
 import pydantic
 
 from spotify import models
+
+if typing.TYPE_CHECKING:
+    from spotify import api
 
 
 class Albums(pydantic.BaseModel):
@@ -59,6 +64,13 @@ class AudioFeatures(pydantic.BaseModel):
 
 class ArtistsPaginator(pydantic.BaseModel):
     paginator: models.CursorPaginator[models.Artist] = pydantic.Field(alias="artists")
+
+    @classmethod
+    def from_payload(cls, data: bytes, api_class: api.API) -> typing.Self:
+        obj = cls.model_validate_json(data)
+        obj.paginator._api = api_class  # pyright: ignore[reportPrivateUsage]
+        obj.paginator._item_type = models.Artist  # pyright: ignore[reportPrivateUsage]
+        return obj
 
 
 class Devices(pydantic.BaseModel):

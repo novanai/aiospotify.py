@@ -75,7 +75,7 @@ class API:
 
         async with self.session.request(
             method,
-            f"{spotify.BASE_URL}/{url}",
+            f"{spotify.BASE_URL}/{url}" if not url.startswith(spotify.BASE_URL) else url,
             params=utils.process_dict(params) if params is not None else None,
             json=utils.process_dict(json) if json is not None else None,
             data=data if data is not None else None,
@@ -85,9 +85,6 @@ class API:
             },
         ) as r:
             data = await r.content.read()
-
-            with open("./test.json", "w") as f:
-                json_.dump(json_.loads(data), f, indent=4)
 
             if r.content_type == "application/json" and r.ok:
                 return data
@@ -218,7 +215,7 @@ class API:
             params={"limit": limit, "offset": offset, "market": market},
         )
         assert tracks is not None
-        return models.Paginator[models.SimpleTrack].model_validate_json(tracks)
+        return models.Paginator[models.SimpleTrack].from_payload(tracks, self, models.SimpleTrack)
 
     @validator
     async def get_users_saved_albums(
@@ -253,7 +250,7 @@ class API:
             params={"limit": limit, "offset": offset, "market": market},
         )
         assert albums is not None
-        return models.Paginator[models.SavedAlbum].model_validate_json(albums)
+        return models.Paginator[models.SavedAlbum].from_payload(albums, self, models.SavedAlbum)
 
     @validator
     async def save_albums_for_current_user(
@@ -415,7 +412,7 @@ class API:
             },
         )
         assert albums is not None
-        return models.Paginator[models.ArtistAlbum].model_validate_json(albums)
+        return models.Paginator[models.ArtistAlbum].from_payload(albums, self, models.ArtistAlbum)
 
     @validator
     async def get_artists_top_tracks(
@@ -544,7 +541,9 @@ class API:
             params={"limit": limit, "offset": offset, "market": market},
         )
         assert chapters is not None
-        return models.Paginator[models.SimpleChapter].model_validate_json(chapters)
+        return models.Paginator[models.SimpleChapter].from_payload(
+            chapters, self, models.SimpleChapter
+        )
 
     @validator
     async def get_users_saved_audiobooks(
@@ -572,7 +571,9 @@ class API:
         """
         audiobooks = await self.get("me/audiobooks", params={"limit": limit, "offset": offset})
         assert audiobooks is not None
-        return models.Paginator[models.SimpleAudiobook].model_validate_json(audiobooks)
+        return models.Paginator[models.SimpleAudiobook].from_payload(
+            audiobooks, self, models.SimpleAudiobook
+        )
 
     @validator
     async def save_audiobooks_for_user(
@@ -903,7 +904,9 @@ class API:
             params={"limit": limit, "offset": offset, "market": market},
         )
         assert episodes is not None
-        return models.Paginator[models.SavedEpisode].model_validate_json(episodes)
+        return models.Paginator[models.SavedEpisode].from_payload(
+            episodes, self, models.SavedEpisode
+        )
 
     @validator
     async def save_episodes_for_current_user(
@@ -1355,7 +1358,8 @@ class API:
         after: MissingOr[datetime.datetime] = MISSING,
         before: MissingOr[datetime.datetime] = MISSING,
     ) -> models.CursorPaginator[models.PlayHistory]:
-        """Get tracks from the current user's recently played tracks.
+        """Get tracks from the current user's recently played tracks, starting with the most recently
+        played track and going backwards in history.
 
         !!! scopes "Required Authorization Scope"
             [`USER_READ_RECENTLY_PLAYED`][spotify.enums.Scope.USER_READ_RECENTLY_PLAYED]
@@ -1387,7 +1391,9 @@ class API:
             },
         )
         assert played is not None
-        return models.CursorPaginator[models.PlayHistory].model_validate_json(played)
+        return models.CursorPaginator[models.PlayHistory].from_payload(
+            played, self, models.PlayHistory
+        )
 
     @validator
     async def get_users_queue(self) -> models.Queue:
@@ -1579,7 +1585,7 @@ class API:
             },
         )
         assert items is not None
-        return models.Paginator[models.PlaylistItem].model_validate_json(items)
+        return models.Paginator[models.PlaylistItem].from_payload(items, self, models.PlaylistItem)
 
     # TODO: split replace and reorder into their own overloads
     @validator
@@ -1760,7 +1766,9 @@ class API:
             },
         )
         assert playlists is not None
-        return models.Paginator[models.SimplePlaylist].model_validate_json(playlists)
+        return models.Paginator[models.SimplePlaylist].from_payload(
+            playlists, self, models.SimplePlaylist
+        )
 
     @validator
     async def get_users_playlists(
@@ -1800,7 +1808,9 @@ class API:
             },
         )
         assert playlists is not None
-        return models.Paginator[models.SimplePlaylist].model_validate_json(playlists)
+        return models.Paginator[models.SimplePlaylist].from_payload(
+            playlists, self, models.SimplePlaylist
+        )
 
     @validator
     async def create_playlist(
@@ -2200,7 +2210,9 @@ class API:
             params={"limit": limit, "offset": offset, "market": market},
         )
         assert episodes is not None
-        return models.Paginator[models.SimpleEpisode].model_validate_json(episodes)
+        return models.Paginator[models.SimpleEpisode].from_payload(
+            episodes, self, models.SimpleEpisode
+        )
 
     @validator
     async def get_users_saved_shows(
@@ -2231,7 +2243,7 @@ class API:
             params={"limit": limit, "offset": offset},
         )
         assert shows is not None
-        return models.Paginator[models.SavedShow].model_validate_json(shows)
+        return models.Paginator[models.SavedShow].from_payload(shows, self, models.SavedShow)
 
     @validator
     async def save_shows_for_current_user(
@@ -2369,7 +2381,7 @@ class API:
             params={"limit": limit, "offset": offset, "market": market},
         )
         assert tracks is not None
-        return models.Paginator[models.SavedTrack].model_validate_json(tracks)
+        return models.Paginator[models.SavedTrack].from_payload(tracks, self, models.SavedTrack)
 
     @validator
     async def save_tracks_for_current_user(
@@ -2788,10 +2800,12 @@ class API:
         )
         assert items is not None
         if type is enums.TopItemType.ARTISTS:
-            return models.Paginator[models.Artist].model_validate_json(items)
+            return models.Paginator[models.Artist].from_payload(items, self, models.Artist)
         else:
             assert type is enums.TopItemType.TRACKS
-            return models.Paginator[models.TrackWithSimpleArtist].model_validate_json(items)
+            return models.Paginator[models.TrackWithSimpleArtist].from_payload(
+                items, self, models.TrackWithSimpleArtist
+            )
 
     @validator
     async def get_users_profile(
@@ -2885,7 +2899,7 @@ class API:
             params={"type": "artist", "after": after, "limit": limit},
         )
         assert followed is not None
-        return internals.ArtistsPaginator.model_validate_json(followed).paginator
+        return internals.ArtistsPaginator.from_payload(followed, self).paginator
 
     @validator
     async def follow_artists_or_users(
