@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import typing
+from collections.abc import AsyncGenerator
 
 import pydantic
 
@@ -10,7 +11,6 @@ from spotify import enums, utils
 if typing.TYPE_CHECKING:
     from spotify import api
 
-from collections.abc import AsyncGenerator
 
 __all__: typing.Sequence[str] = (
     "SavedAlbum",
@@ -1149,6 +1149,11 @@ class BasePaginator(
     async def lazy_iter_items(self) -> AsyncGenerator[T]:
         """Iterate over all the items of the paginator, starting from the currently fetched items.
 
+        Returns
+        -------
+        collections.abc.AsyncGenerator[T]
+            An async generator of the requested items.
+
         Example
         -------
         ```py
@@ -1159,13 +1164,23 @@ class BasePaginator(
         for item in self.items:
             yield item
 
-        while self.next is not None:
-            data = await self._api.get(self.next)
-            assert data is not None
-            self = type(self).from_payload(data, self._api, self._item_type)
+        paginator = self
 
-            for item in self.items:
+        while paginator.next is not None:
+            data = await self._api.get(paginator.next)
+            assert data is not None
+            paginator = type(self).from_payload(data, self._api, self._item_type)
+
+            for item in paginator.items:
                 yield item
+
+    async def get_next(self) -> typing.Self | None:
+        if self.next is None:
+            return None
+
+        data = await self._api.get(self.next)
+        assert data is not None
+        return type(self).from_payload(data, self._api, self._item_type)
 
 
 class Paginator(BasePaginator[T]):
@@ -1176,6 +1191,35 @@ class Paginator(BasePaginator[T]):
     previous: str | None
     """URL to the previous page of items."""
 
+    async def get_next(self) -> Paginator[T] | None:
+        """Get the next page of items in the paginator.
+
+        Returns
+        -------
+        spotify.models.Paginator
+            The next paginator page.
+        None
+            If the [`next`][spotify.models.Paginator.next] URL is [`None`][]
+        """
+        return await super().get_next()
+
+    async def get_previous(self) -> Paginator[T] | None:
+        """Get the previous page of items in the paginator.
+
+        Returns
+        -------
+        spotify.models.Paginator
+            The previous paginator page.
+        None
+            If the [`previous`][spotify.models.Paginator.previous] URL is [`None`][]
+        """
+        if self.previous is None:
+            return None
+
+        data = await self._api.get(self.previous)
+        assert data is not None
+        return type(self).from_payload(data, self._api, self._item_type)
+
 
 class CursorPaginator(BasePaginator[T]):
     """A paginator using cursors to paginate the content."""
@@ -1184,6 +1228,18 @@ class CursorPaginator(BasePaginator[T]):
     """The cursors used to find the next set of items."""
     total: int | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
     """The total number of items available to return."""
+
+    async def get_next(self) -> CursorPaginator[T] | None:
+        """Get the next page of items in the paginator.
+
+        Returns
+        -------
+        spotify.models.CursorPaginator
+            The next paginator page.
+        None
+            If the [`next`][spotify.models.CursorPaginator.next] url is [`None`][]
+        """
+        return await super().get_next()
 
 
 class Cursors(BaseModel):

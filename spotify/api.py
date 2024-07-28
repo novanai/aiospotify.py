@@ -86,10 +86,6 @@ class API:
         ) as r:
             data = await r.content.read()
 
-            # TODO: REMOVE THIS BEFORE RELEASE
-            with open("./test.json", "w") as f:
-                json_.dump(json_.loads(data), f, indent=4)
-
             if r.content_type == "application/json" and r.ok:
                 return data
             elif r.content_type == "application/json":
@@ -1362,7 +1358,8 @@ class API:
         after: MissingOr[datetime.datetime] = MISSING,
         before: MissingOr[datetime.datetime] = MISSING,
     ) -> models.CursorPaginator[models.PlayHistory]:
-        """Get tracks from the current user's recently played tracks.
+        """Get tracks from the current user's recently played tracks, starting with the most recently
+        played track and going backwards in history.
 
         !!! scopes "Required Authorization Scope"
             [`USER_READ_RECENTLY_PLAYED`][spotify.enums.Scope.USER_READ_RECENTLY_PLAYED]

@@ -10,7 +10,6 @@ if typing.TYPE_CHECKING:
     from spotify import api
 
 
-
 class Albums(pydantic.BaseModel):
     albums: list[models.Album]
 
