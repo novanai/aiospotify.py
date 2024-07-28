@@ -2,6 +2,7 @@
 
 An asynchronous Python 3.10+ Spotify Web API wrapper.
 
+* **GitHub:** <https://github.com/novanai/aiospotify.py>
 * **Documentation:** <https://aiospotifypy.readthedocs.io/en/stable/>
 * **Examples**: <https://github.com/novanai/aiospotify.py/tree/master/examples>
 
@@ -32,9 +33,3 @@ async def main():
 
 asyncio.run(main())
 ```
-
-## To-Do List
-
-* [ ] Add extra methods to Paginator *(for fetching all items, lazy iteration etc)*
-* [ ] URI helper class
-* [ ] Automatically handle 429's (Too Many Requests)

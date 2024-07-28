@@ -27,6 +27,7 @@ dev = ["nox==2024.4.15"]
 "dev.release" = ["flit==3.9.0"]
 "dev.docs" = [
   "mkdocs==1.6.0",
+  "mkdocs-include-markdown-plugin==6.2.1",
   "mkdocs-material==9.5.30",
   "mkdocs-minify-plugin==0.8.0",
   "mkdocstrings-python==1.10.5",
