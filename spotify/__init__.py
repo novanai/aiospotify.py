@@ -7,7 +7,7 @@ from spotify.models import *
 from spotify.oauth import *
 from spotify.types import *
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 BASE_URL = "https://api.spotify.com/v1"
 
