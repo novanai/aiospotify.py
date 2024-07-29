@@ -155,6 +155,7 @@ class SimpleAlbum(BaseModel):
     """The Spotify URI for the album."""
     artists: list[SimpleArtist]
     """The artists of the album."""
+    type: typing.Literal["album"]
 
 
 class ArtistAlbum(SimpleAlbum):
@@ -196,6 +197,7 @@ class SimpleArtist(BaseModel):
     """The name of the artist."""
     uri: str
     """The Spotify URI for the artist."""
+    type: typing.Literal["artist"]
 
 
 class Artist(SimpleArtist):
@@ -261,6 +263,7 @@ class SimpleAudiobook(BaseModel):
     """The Spotify URI for the audiobook."""
     total_chapters: int | None
     """The number of chapters in the audiobook."""
+    type: typing.Literal["audiobook"]
 
 
 class Audiobook(SimpleAudiobook):
@@ -357,6 +360,7 @@ class AudioFeatures(BaseModel, DurationMS):
     Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks
     with low valence sound more negative (e.g. sad, depressed, angry).
     """
+    type: typing.Literal["audio_features"]
 
 
 class AudioAnalysis(BaseModel):
@@ -755,6 +759,7 @@ class SimpleChapter(BaseModel, DurationMS):
     """The Spotify URI for the chapter."""
     restrictions: Restrictions | None = None
     """Present when a content restriction is applied."""
+    type: typing.Literal["chapter"]
 
 
 class Chapter(SimpleChapter):
@@ -834,6 +839,7 @@ class SimpleEpisode(BaseModel, DurationMS):
     """The Spotify URI for the episode."""
     restrictions: Restrictions | None = None
     """Present when a content restriction is applied."""
+    type: typing.Literal["episode"]
 
 
 class Episode(SimpleEpisode):
@@ -1066,6 +1072,7 @@ class SimplePlaylist(BaseModel):
     """Link to the playlist's tracks."""
     uri: str
     """The Spotify URI for the playlist."""
+    type: typing.Literal["playlist"]
 
 
 class Playlist(SimplePlaylist):
@@ -1107,7 +1114,27 @@ class PlaylistItem(BaseModel):
     is_local: bool
     """Whether this track or episode is a local file or not."""
     item: TrackWithSimpleArtist | Episode | None = pydantic.Field(alias="track")
-    """Information about the track or episode."""
+    """Information about the track or episode.
+    
+    !!! warning
+        At present, some or all episodes will be set to [`None`][] as Spotify may send them in a
+        malformed format which cannot be decoded into an [`Episode`][spotify.models.Episode]
+        object.
+    """
+
+    @pydantic.field_validator("item", mode="before", check_fields=False)
+    @classmethod
+    def item_validator(
+        cls, v: dict[str, typing.Any] | None
+    ) -> dict[str, typing.Any] | Episode | None:
+        # Remove malformed episode objects
+        if v is not None and v["type"] == "episode":
+            try:
+                return Episode.model_validate_json(str(v))
+            except pydantic.ValidationError:
+                return None
+
+        return v
 
 
 class Playlists(BaseModel):
@@ -1329,6 +1356,7 @@ class SimpleShow(BaseModel):
     """The Spotify URI for the show."""
     total_episodes: int
     """The total number of episodes in the show."""
+    type: typing.Literal["show"]
 
 
 class Show(SimpleShow):
@@ -1382,6 +1410,7 @@ class LinkedFromTrack(BaseModel):
     """The Spotify ID for the track."""
     uri: str
     """The Spotify URI for the track."""
+    type: typing.Literal["track"]
 
 
 class TrackBase(LinkedFromTrack, DurationMS, typing.Generic[ArtistT]):
@@ -1465,6 +1494,7 @@ class SimpleUser(BaseModel):
     """The Spotify user ID for the user."""
     uri: str
     """The Spotify URI for the user."""
+    type: typing.Literal["user"]
 
 
 class User(SimpleUser):

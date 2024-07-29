@@ -12,6 +12,11 @@ An asynchronous Python 3.10+ Spotify Web API wrapper.
 pip install -U aiospotify.py
 ```
 
+Or to install the latest development version:
+```bash
+pip install -U git+https://github.com/novanai/aiospotify.py
+```
+
 ## Getting Started
 
 ```py
